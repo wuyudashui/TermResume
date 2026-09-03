@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="一个可以 cd、ls、cat 的 Linux 终端风格个人主页" />
+  <title>guest@my-linux:~ — TermResume</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%90%A7%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <header class="app-bar">
+    <div class="app-brand">
+      <div class="app-logo" aria-hidden="true">&gt;_</div>
+      <div class="app-title">
+        <strong id="app-brand-name">TermResume · 终端风格动态简历</strong>
+        <span>Terminal Resume · Interactive Homepage</span>
+      </div>
+    </div>
+    <div class="theme-box">
+      <span class="theme-label">外观</span>
+      <button class="mode-toggle" id="mode-toggle" type="button" aria-pressed="false">
+        <span class="mode-icon" id="mode-icon" aria-hidden="true">☾</span>
+        <span class="mode-text" id="mode-text">黑夜模式</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <div class="stage">
+      <main class="terminal" aria-label="Linux 终端风格个人主页">
+    <header class="term-bar">
+      <div class="lights" aria-hidden="true">
+        <i class="light red"></i>
+        <i class="light yellow"></i>
+        <i class="light green"></i>
+      </div>
+      <h1 class="term-title">guest@my-linux: ~</h1>
+      <div class="term-tag" aria-hidden="true">zsh</div>
+    </header>
+
+    <section class="term-screen" id="screen" aria-live="polite">
+      <div class="term-history" id="history"></div>
+    </section>
+
+    <form class="cmdline" id="cmdline" autocomplete="off">
+      <span class="prompt" aria-hidden="true">
+        <span class="p-user">guest</span><span class="p-at">@</span><span class="p-host">my-linux</span><span class="p-colon">:</span><span class="p-path">~</span><span class="p-dollar">$</span>
+      </span>
+      <input
+        id="cmd-input"
+        type="text"
+        spellcheck="false"
+        autocapitalize="off"
+        autocomplete="off"
+        autocorrect="off"
+        placeholder="系统启动中…"
+        aria-label="输入 Linux 命令，例如 help、cd projects、cat about.md"
+        disabled
+      />
+    </form>
+
+    <footer class="term-status">
+      <span class="st-left"><i class="st-dot"></i> NORMAL · 虚拟只读系统</span>
+      <span class="st-right"><span id="clock">--:--:--</span></span>
+    </footer>
+      </main>
+
+      <section class="page-view" id="page-view" aria-label="图形页面视图">
+        <div class="page-head">
+          <button class="page-back" id="page-back" type="button">← 返回终端</button>
+          <div class="page-title" id="page-title"></div>
+          <nav class="page-nav" id="page-nav" aria-label="页面导航">
+            <a href="#/awards">获奖</a>
+            <a href="#/certificates">证书</a>
+            <a href="#/resume">履历</a>
+            <a href="#/projects">项目</a>
+          </nav>
+          <div class="page-spacer" aria-hidden="true"></div>
+        </div>
+        <div class="page-body" id="page-body"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+  <script src="session.js"></script>
+  <script src="terminal.js"></script>
+  <script src="admin.js"></script>
+  <script src="pages.js"></script>
+</body>
+</html>

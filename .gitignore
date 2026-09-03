@@ -1,0 +1,7 @@
+# 本地测试/截图产物
+_qa/
+
+# 编辑器与系统文件
+.DS_Store
+Thumbs.db
+*.log
