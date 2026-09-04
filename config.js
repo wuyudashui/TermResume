@@ -21,7 +21,13 @@ const AUTH = {
   password: '123456',
 };
 
-const DATA_SCHEMA_VERSION = 3;
+/* Spring Boot API 地址。留空时使用本地 LocalStorage；部署后端后填写 HTTPS 地址。 */
+const API_CONFIG = Object.freeze({
+  baseUrl: '', // 例如 https://termresume-api.example.com
+  timeoutMs: 10000,
+});
+
+const DATA_SCHEMA_VERSION = 4;
 
 /* 个人资料的唯一默认来源：CONFIG 与可维护 Profile 都从这里初始化。 */
 const IDENTITY_DEFAULTS = Object.freeze({
@@ -200,6 +206,30 @@ const PROFILE_DEFAULTS = {
       level: '本科院校赛道国赛铜奖',
       note: '',
       image: 'src/awards/mtb_third.jpg',
+    },
+    {
+      id: 'a-icm-2026',
+      title: '美国大学生数学建模竞赛（ICM）',
+      year: '2026',
+      level: 'Meritorious Winner',
+      note: '跨学科建模竞赛团队奖项',
+      image: 'src/awards/icm_meritorious_winner.jpg',
+    },
+    {
+      id: 'a-cmc-2025',
+      title: '第十七届全国大学生数学竞赛',
+      year: '2025',
+      level: '非数学 A 类二等奖',
+      note: '',
+      image: 'src/awards/cmc_non_math_a_second.jpg',
+    },
+    {
+      id: 'a-cccc-2026',
+      title: '中国高校计算机大赛团体程序设计天梯赛',
+      year: '2026',
+      level: '全国总决赛“华山论剑”组团队三等奖',
+      note: '成都理工大学 · 成理宜宾一队',
+      image: 'src/awards/cccc_team_programming_third.jpg',
     },
   ],
   certificates: [],

@@ -36,6 +36,11 @@ function saveSession() {
 }
 
 function restoreSession() {
+  if (typeof apiEnabled === 'function' && apiEnabled()) {
+    sessionUser = typeof apiHasToken === 'function' && apiHasToken() ? 'admin' : CONFIG.user;
+    sessionRole = sessionUser === 'admin' ? 'admin' : 'guest';
+    return;
+  }
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (raw) {
@@ -61,7 +66,17 @@ function setSession(user, role) {
   emitSessionChange();
 }
 
-function loginWithCredential(user, pass) {
+async function loginWithCredential(user, pass) {
+  if (typeof apiEnabled === 'function' && apiEnabled()) {
+    try {
+      await apiLogin(user, pass);
+      setSession(user, 'admin');
+      return true;
+    } catch (error) {
+      lastStorageError = error instanceof Error ? error.message : String(error);
+      return false;
+    }
+  }
   if (user === AUTH.username && pass === AUTH.password) {
     setSession(AUTH.username, 'admin');
     return true;
@@ -70,6 +85,7 @@ function loginWithCredential(user, pass) {
 }
 
 function logoutSession() {
+  if (typeof apiLogout === 'function') apiLogout();
   setSession(CONFIG.user, 'guest');
 }
 
@@ -140,6 +156,16 @@ function normalizeProfile(value, sourceVersion = 0) {
   /* v3 将项目纳入可维护 Profile，旧数据自动继承配置中的默认项目。 */
   if (sourceVersion < 3 && !Array.isArray(input.projects)) {
     normalized.projects = d.projects;
+  }
+
+  /* v4 发布三项新奖项；只补充新 ID，保留用户已有、修改或删除的其他记录。 */
+  if (sourceVersion < 4) {
+    const addedAwardIds = new Set(['a-icm-2026', 'a-cmc-2025', 'a-cccc-2026']);
+    const existingAwardIds = new Set(normalized.awards.map((award) => award && award.id));
+    const newDefaultAwards = d.awards.filter(
+      (award) => addedAwardIds.has(award.id) && !existingAwardIds.has(award.id)
+    );
+    normalized.awards = [...normalized.awards, ...newDefaultAwards];
   }
 
   return normalized;
@@ -300,6 +326,48 @@ function saveProfile() {
   return true;
 }
 
+async function persistProfile() {
+  if (typeof apiEnabled !== 'function' || !apiEnabled()) return saveProfile();
+  if (typeof apiHasToken !== 'function' || !apiHasToken()) {
+    lastStorageError = '远程管理会话已失效，请重新 login';
+    rollbackProfile();
+    return false;
+  }
+  try {
+    await apiSaveContent(profileEnvelope(profile));
+    if (!saveProfile()) return false;
+    lastStorageError = '';
+    return true;
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    rollbackProfile();
+    return false;
+  }
+}
+
+function rollbackProfile() {
+  if (lastSavedProfile) profile = JSON.parse(JSON.stringify(lastSavedProfile));
+  applyProfileToConfig();
+  syncProfileToVfs();
+  emitProfileChange();
+}
+
+async function hydrateProfileFromApi() {
+  if (typeof apiEnabled !== 'function' || !apiEnabled()) return false;
+  try {
+    profile = parseProfilePayload(await apiFetchContent());
+    lastStorageError = '';
+    applyProfileToConfig();
+    syncProfileToVfs();
+    lastSavedProfile = JSON.parse(JSON.stringify(profile));
+    emitProfileChange();
+    return true;
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    return false;
+  }
+}
+
 function getProfile() {
   if (!profile) loadProfile();
   return profile;
@@ -358,6 +426,28 @@ function importProfileData(raw) {
   return true;
 }
 
+async function importAndPersistProfile(raw) {
+  if (typeof apiEnabled !== 'function' || !apiEnabled()) return importProfileData(raw);
+  let imported;
+  try {
+    imported = parseProfilePayload(validateImportPayload(raw));
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    return false;
+  }
+  try {
+    localStorage.setItem(PROFILE_BACKUP_KEY, JSON.stringify(profileEnvelope(getProfile())));
+  } catch (error) {
+    lastStorageError = '无法创建导入前备份：' + (error instanceof Error ? error.message : String(error));
+    return false;
+  }
+  profile = imported;
+  applyProfileToConfig();
+  syncProfileToVfs();
+  emitProfileChange();
+  return persistProfile();
+}
+
 function pickProfileImport() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
@@ -367,7 +457,7 @@ function pickProfileImport() {
       const selected = input.files && input.files[0];
       if (!selected) { resolve({ ok: false, cancelled: true }); return; }
       try {
-        const ok = importProfileData(await selected.text());
+        const ok = await importAndPersistProfile(await selected.text());
         resolve({ ok, cancelled: false, error: ok ? '' : getLastStorageError() });
       } catch (error) {
         lastStorageError = error instanceof Error ? error.message : String(error);
@@ -414,3 +504,4 @@ function profileForDisplay() {
 
 restoreSession();
 loadProfile();
+hydrateProfileFromApi();
