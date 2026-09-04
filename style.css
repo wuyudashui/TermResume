@@ -163,8 +163,23 @@ body {
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   min-width: 0;
+}
+
+.app-brand-symbol {
+  color: var(--green-bright);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 12px var(--glow-soft);
+}
+
+.app-brand > strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .app-logo {
@@ -1947,7 +1962,115 @@ body {
 }
 
 .terminal {
+  isolation: isolate;
   background: var(--terminal-bg);
+}
+
+/* 像素风终端底纹：网格与阶梯地形保持在所有终端内容下方。 */
+.terminal::before,
+.terminal::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.terminal::before {
+  inset: 38px 0 24px;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--green) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--green) 7%, transparent) 1px, transparent 1px),
+    conic-gradient(
+      from 90deg at 1px 1px,
+      color-mix(in srgb, var(--cyan) 5%, transparent) 90deg,
+      transparent 0
+    );
+  background-position: 0 0, 0 0, 4px 4px;
+  background-size: 16px 16px, 16px 16px, 32px 32px;
+  opacity: 0.72;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 100%);
+}
+
+.terminal::after {
+  right: 0;
+  bottom: 24px;
+  left: 0;
+  height: 112px;
+  background:
+    linear-gradient(90deg,
+      transparent 0 3%, var(--glow-soft) 3% 5%, transparent 5% 8%,
+      var(--glow-soft) 8% 11%, transparent 11% 17%, var(--glow-soft) 17% 19%,
+      transparent 19% 27%, var(--glow-soft) 27% 31%, transparent 31% 38%,
+      var(--glow-soft) 38% 40%, transparent 40% 49%, var(--glow-soft) 49% 54%,
+      transparent 54% 63%, var(--glow-soft) 63% 66%, transparent 66% 73%,
+      var(--glow-soft) 73% 78%, transparent 78% 86%, var(--glow-soft) 86% 89%,
+      transparent 89% 95%, var(--glow-soft) 95% 98%, transparent 98%),
+    linear-gradient(to top,
+      color-mix(in srgb, var(--green) 10%, transparent) 0 8px,
+      transparent 8px 16px,
+      color-mix(in srgb, var(--cyan) 7%, transparent) 16px 24px,
+      transparent 24px 40px,
+      color-mix(in srgb, var(--green) 5%, transparent) 40px 48px,
+      transparent 48px);
+  background-size: 100% 100%, 100% 100%;
+  opacity: 0.85;
+  clip-path: polygon(
+    0 100%, 0 72%, 5% 72%, 5% 86%, 11% 86%, 11% 64%, 18% 64%, 18% 80%,
+    24% 80%, 24% 55%, 31% 55%, 31% 75%, 39% 75%, 39% 46%, 46% 46%,
+    46% 68%, 54% 68%, 54% 58%, 62% 58%, 62% 78%, 70% 78%, 70% 50%,
+    78% 50%, 78% 70%, 86% 70%, 86% 60%, 93% 60%, 93% 82%, 100% 82%, 100% 100%
+  );
+}
+
+.terminal-pixel-wordmark {
+  position: absolute;
+  z-index: 0;
+  top: clamp(150px, 29%, 260px);
+  right: clamp(20px, 5vw, 86px);
+  max-width: 64%;
+  margin: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--green) 16%, transparent);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: clamp(5px, 0.58vw, 9px);
+  font-weight: 900;
+  line-height: 1;
+  white-space: pre;
+  user-select: none;
+  pointer-events: none;
+  text-shadow: 8px 8px 0 color-mix(in srgb, var(--cyan) 4%, transparent);
+  transform: scaleX(0.9);
+  transform-origin: top right;
+}
+
+.terminal > .term-bar,
+.terminal > .term-screen,
+.terminal > .cmdline,
+.terminal > .term-status {
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="day"] .terminal::before {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--green) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--green) 13%, transparent) 1px, transparent 1px),
+    conic-gradient(
+      from 90deg at 1px 1px,
+      color-mix(in srgb, var(--cyan) 10%, transparent) 90deg,
+      transparent 0
+    );
+  opacity: 0.7;
+}
+
+[data-theme="day"] .terminal::after {
+  filter: saturate(1.18) contrast(1.12);
+  opacity: 0.68;
+}
+
+[data-theme="day"] .terminal-pixel-wordmark {
+  color: color-mix(in srgb, var(--green) 22%, transparent);
+  text-shadow: 8px 8px 0 color-mix(in srgb, var(--cyan) 7%, transparent);
 }
 
 .term-bar {
@@ -2417,6 +2540,15 @@ body {
   .term-screen {
     padding: 10px 13px 4px;
     font-size: 12px;
+  }
+
+  .terminal-pixel-wordmark {
+    top: 132px;
+    right: 10px;
+    max-width: 78%;
+    font-size: 4px;
+    opacity: 0.7;
+    text-shadow: 4px 4px 0 color-mix(in srgb, var(--cyan) 4%, transparent);
   }
 
   .identity-block {

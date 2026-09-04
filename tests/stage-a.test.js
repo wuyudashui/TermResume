@@ -39,7 +39,9 @@ function createContext(storage) {
       getElementById() { return null; },
       querySelector() { return null; },
     },
-    addCmd(name, cat, desc, usage, run) { commands[name] = { cat, desc, usage, run }; },
+    addCmd(name, cat, desc, usage, run, options = {}) {
+      commands[name] = { cat, desc, usage, run, access: options.access || 'guest', ...options };
+    },
     writeText(text, cls) { output.push({ text, cls }); },
     writeHTML(text, cls) { output.push({ text, cls }); },
     blankLine() {},
@@ -47,6 +49,67 @@ function createContext(storage) {
   });
   context.commands = commands;
   context.output = output;
+  return context;
+}
+
+function createElement() {
+  return {
+    children: [],
+    className: '',
+    dataset: {},
+    style: {},
+    value: '',
+    disabled: false,
+    innerHTML: '',
+    textContent: '',
+    appendChild(child) { this.children.push(child); return child; },
+    addEventListener() {},
+    querySelectorAll() { return []; },
+    setAttribute(name, value) { this[name] = String(value); },
+    getAttribute(name) { return this[name] || null; },
+    removeAttribute(name) { delete this[name]; },
+    focus() {},
+    click() {},
+    remove() {},
+    requestSubmit() {},
+  };
+}
+
+function createTerminalContext(storage) {
+  const elements = new Map();
+  const element = (key) => {
+    if (!elements.has(key)) elements.set(key, createElement());
+    return elements.get(key);
+  };
+  const document = {
+    documentElement: element('documentElement'),
+    body: element('body'),
+    title: '',
+    createElement,
+    getElementById(id) { return element('#' + id); },
+    querySelector(selector) { return element(selector); },
+    addEventListener() {},
+  };
+  const context = vm.createContext({
+    console,
+    navigator: { userAgent: 'TermResume test' },
+    localStorage: storage,
+    document,
+    window: { addEventListener() {} },
+    location: { hash: '#/terminal' },
+    requestAnimationFrame(fn) { fn(); },
+    matchMedia() { return { matches: true }; },
+    setTimeout(fn) { fn(); return 1; },
+    clearTimeout() {},
+    setInterval() { return 1; },
+    clearInterval() {},
+    Blob,
+    URL: {
+      createObjectURL() { return 'blob:test'; },
+      revokeObjectURL() {},
+    },
+  });
+  context.helpOutput = [];
   return context;
 }
 
@@ -115,6 +178,17 @@ function value(context, expression) {
 {
   const context = createContext(createStorage());
   runFiles(context, ['config.js', 'data.js', 'session.js', 'admin.js']);
+  assert.equal(context.commands.login.access, 'guest');
+  assert.equal(context.commands.profile.access, 'admin');
+  assert.equal(context.commands.avatar.access, 'admin');
+  assert.equal(context.commands.data.access, 'admin');
+  assert.equal(context.commands.logout.access, 'admin');
+  assert.equal(context.commands['admin-help'].access, 'admin');
+  assert.equal(context.commands.blog.access, 'mixed');
+  assert.equal(context.commands.awards.access, 'mixed');
+  assert.equal(context.commands.certs.access, 'mixed');
+  assert.match(context.commands.blog.guestUsage, /^blog list/);
+  assert.equal(context.commands.blog.guestUsage.includes('add'), false);
   context.commands.awards.run(['list']);
   assert.equal(context.output.some((line) => /Python/.test(line.text)), true);
   context.commands.awards.run(['del', 'a-lqb-python-2026']);
@@ -129,6 +203,51 @@ function value(context, expression) {
   assert.equal(value(context, 'getProfile().blogs.at(-1).date'), '2026-09-04');
   assert.equal(value(context, 'getProfile().blogs.at(-1).tags.join(",")'), '技术,终端');
   assert.equal(value(context, 'Object.keys(VFS.home[CONFIG.user].blog).filter((x) => x !== "_meta").length'), 2);
+}
+
+{
+  const context = createTerminalContext(createStorage());
+  runFiles(context, ['config.js', 'data.js', 'session.js', 'terminal.js', 'admin.js']);
+  value(context, `
+    writeHTML = (text, cls) => helpOutput.push({ text: String(text), cls: cls || '' });
+    writeText = (text, cls) => helpOutput.push({ text: String(text), cls: cls || '' });
+    blankLine = () => helpOutput.push({ text: '', cls: '' });
+    writeError = (text) => helpOutput.push({ text: String(text), cls: 'red' });
+  `);
+
+  context.helpOutput.length = 0;
+  value(context, 'cmdHelp([])');
+  let output = context.helpOutput.map((line) => line.text).join('\n');
+  assert.match(output, /Guest 只读模式/);
+  assert.match(output, /login/);
+  assert.match(output, /awards/);
+  assert.doesNotMatch(output, /profile/);
+  assert.doesNotMatch(output, /avatar/);
+  assert.doesNotMatch(output, /admin-help/);
+  assert.doesNotMatch(output, /123456/);
+
+  context.helpOutput.length = 0;
+  value(context, 'cmdHelp(["profile"])');
+  output = context.helpOutput.map((line) => line.text).join('\n');
+  assert.match(output, /仅管理员可用/);
+
+  context.helpOutput.length = 0;
+  value(context, 'cmdHelp(["blog"])');
+  output = context.helpOutput.map((line) => line.text).join('\n');
+  assert.match(output, /\[只读\]/);
+  assert.match(output, /blog list \| blog show &lt;id&gt;/);
+  assert.doesNotMatch(output, /blog add/);
+
+  value(context, 'setSession(AUTH.username, "admin")');
+  context.helpOutput.length = 0;
+  value(context, 'cmdHelp([])');
+  output = context.helpOutput.map((line) => line.text).join('\n');
+  assert.match(output, /Admin 管理模式/);
+  assert.match(output, /profile/);
+  assert.match(output, /avatar/);
+  assert.match(output, /data/);
+  assert.match(output, /admin-help/);
+  assert.match(output, /goto manage/);
 }
 
 console.log('stage-a tests: ok');

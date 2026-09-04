@@ -298,8 +298,7 @@ function initTitles() {
   if (titleEl) titleEl.textContent = `${activeUser()}@${CONFIG.host}: ~`;
   document.title = `${activeUser()}-${SITE_CONTENT.productName}`;
   const brandEl = document.getElementById('app-brand-name');
-  if (brandEl) brandEl.textContent = CONFIG.name + ' · ' + SITE_CONTENT.productName.toUpperCase();
-  setText('app-brand-subtitle', SITE_CONTENT.brandSubtitle);
+  if (brandEl) brandEl.textContent = SITE_CONTENT.productName;
   setText('availability-text', SITE_CONTENT.availabilityText);
   const descriptionEl = document.getElementById('document-description');
   if (descriptionEl) descriptionEl.setAttribute('content', SITE_CONTENT.documentDescription);
@@ -454,11 +453,44 @@ function renderNeo() {
  * =================================================================== */
 const COMMANDS = {};
 
-function addCmd(name, cat, desc, usage, run) {
-  COMMANDS[name] = { name, cat, desc, usage, run };
+function addCmd(name, cat, desc, usage, run, options = {}) {
+  COMMANDS[name] = {
+    name,
+    cat,
+    desc,
+    usage,
+    run,
+    access: options.access || 'guest',
+    guestDesc: options.guestDesc || '',
+    guestUsage: options.guestUsage || '',
+  };
 }
 
-const CATEGORIES = ['导航', '查看文件', '系统信息', '其他'];
+const CATEGORIES = ['导航', '查看文件', '系统信息', '其他', '管理'];
+
+function commandVisible(cmd) {
+  return Boolean(cmd) && (cmd.access !== 'admin' || activeRole() === 'admin');
+}
+
+function visibleCommandNames() {
+  return Object.values(COMMANDS)
+    .filter(commandVisible)
+    .map((cmd) => cmd.name);
+}
+
+function commandDescription(cmd) {
+  if (activeRole() !== 'admin' && cmd.access === 'mixed') {
+    return cmd.guestDesc || cmd.desc;
+  }
+  return cmd.desc;
+}
+
+function commandUsage(cmd) {
+  if (activeRole() !== 'admin' && cmd.access === 'mixed') {
+    return cmd.guestUsage || cmd.usage;
+  }
+  return cmd.usage;
+}
 
 /* ---------- 导航 ---------- */
 function cmdCd(args) {
@@ -700,22 +732,34 @@ function cmdHelp(args) {
       writeError(`help: 没有主题匹配 "${target}"`);
       return;
     }
-    writeHTML(`<span class="green bold">${cmd.name}</span>  ${esc(cmd.desc)}`);
-    if (cmd.usage) writeHTML(`<span class="dim">用法</span>  ${cmd.usage}`);
+    if (!commandVisible(cmd)) {
+      writeError(`help: ${target} 仅管理员可用，请先输入 login`);
+      return;
+    }
+    const accessNote = cmd.access === 'mixed'
+      ? (activeRole() === 'admin' ? ' <span class="green">[可维护]</span>' : ' <span class="yellow">[只读]</span>')
+      : '';
+    const usage = commandUsage(cmd);
+    writeHTML(`<span class="green bold">${cmd.name}</span>${accessNote}  ${esc(commandDescription(cmd))}`);
+    if (usage) writeHTML(`<span class="dim">用法</span>  ${esc(usage)}`);
     return;
   }
 
   CATEGORIES.forEach((cat) => {
     const rows = Object.values(COMMANDS)
-      .filter((c) => c.cat === cat)
+      .filter((c) => c.cat === cat && commandVisible(c))
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!rows.length) return;
-    writeHTML('<span class="help-cat">' + cat + '</span>');
+    const categoryLabel = cat === '管理' && activeRole() !== 'admin' ? '公开内容（只读）' : cat;
+    writeHTML('<span class="help-cat">' + categoryLabel + '</span>');
     rows.forEach((c) => {
+      const badge = c.access === 'mixed'
+        ? (activeRole() === 'admin' ? ' <span class="green">[可维护]</span>' : ' <span class="yellow">[只读]</span>')
+        : '';
       writeHTML(
         '<div class="help-row">' +
           `<span class="cyan">${padRight(c.name, 18)}</span>` +
-          `<span class="dim">${esc(c.desc)}</span>` +
+          `<span class="dim">${esc(commandDescription(c))}</span>${badge}` +
           '</div>'
       );
     });
@@ -730,9 +774,12 @@ function cmdHelp(args) {
   writeHTML(
     '<span class="dim">技巧：Tab 自动补全 · ↑/↓ 历史命令 · 支持 &amp;&amp; 连接 · ls/cat/head/tail/tree 支持 * 与 ? 通配符</span>'
   );
-  writeHTML(
-    '<span class="dim">维护者：输入 login 进入管理模式（默认 admin / 123456）</span>'
-  );
+  if (activeRole() === 'admin') {
+    writeHTML('<span class="green">当前为 Admin 管理模式，可维护公开内容。输入 logout 退出。</span>');
+    writeHTML('<span class="dim">图形管理台：</span> `goto manage` · <span class="dim">管理命令速查：</span> `admin-help`');
+  } else {
+    writeHTML('<span class="yellow">当前为 Guest 只读模式。输入 login 进入管理模式。</span>');
+  }
 }
 
 function cmdWhoami() {
@@ -968,6 +1015,10 @@ function runSegment(raw) {
   }
   const cmd = COMMANDS[name];
   if (cmd) {
+    if (!commandVisible(cmd)) {
+      writeError(`${name}: 仅管理员可用，请先输入 login`);
+      return;
+    }
     /* 文件类命令：对含 * 或 ? 的参数做路径展开（echo 等不展开） */
     if (['ls', 'cat', 'head', 'tail', 'tree'].includes(name)) {
       const expanded = [];
@@ -991,7 +1042,7 @@ function runSegment(raw) {
     cmd.run(args);
   } else {
     writeError(`bash: ${name}: 未找到命令`);
-    const candidates = Object.keys(COMMANDS)
+    const candidates = visibleCommandNames()
       .concat(Object.keys(ALIASES))
       .filter((c) => c.startsWith(name))
       .slice(0, 5);
@@ -1104,6 +1155,7 @@ function doComplete() {
   const head = prefix.trim().split(/\s+/)[0];
   if (head === 'goto') {
     const pages = ['awards', 'certificates', 'resume', 'projects', 'blog', 'docs', 'terminal', 't'];
+    if (activeRole() === 'admin') pages.push('manage');
     const hits = pages.filter((p) => p.startsWith(token)).sort();
     if (hits.length === 1) {
       inputEl.value = prefix + hits[0];
@@ -1117,7 +1169,7 @@ function doComplete() {
     completePathToken(prefix, token);
     return;
   }
-  const names = Object.keys(COMMANDS).concat(Object.keys(ALIASES)).filter((n) => n.startsWith(token)).sort();
+  const names = visibleCommandNames().concat(Object.keys(ALIASES)).filter((n) => n.startsWith(token)).sort();
   if (names.length === 1) {
     inputEl.value = prefix + names[0] + ' ';
   } else if (names.length > 1) {

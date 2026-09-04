@@ -98,7 +98,7 @@ function finishLogin(user, pass) {
     writeText('✅ 登录成功：' + user + '（管理模式）', 'green');
     writeText('输入 goto manage 打开图形管理台，或输入 admin-help 查看管理命令。', 'dim');
   } else {
-    writeText('❌ 登录失败：用户名或密码错误（默认 admin / 123456）', 'red');
+    writeText('❌ 登录失败：用户名或密码错误。', 'red');
     /* 重新从密码阶段开始，用户名保持不变 */
     authActive = true;
     authPhase = 'pass';
@@ -137,10 +137,10 @@ function writeSaveResult(ok, successText, action = '保存') {
 /* ---------- 对外：注册到终端 ---------- */
 function registerAuthAndAdminCommands() {
   if (typeof addCmd !== "function") return;
-  const C = (n,c,d,u,r) => addCmd(n,c,d,u,r);
+  const C = (n, c, d, u, r, options) => addCmd(n, c, d, u, r, options);
   const isAdminNow = () => currentRole() === 'admin';
 
-  C('login', '其他', '登录管理模式，支持 login -u <用户> -p <密码>', 'login | login -u admin -p 123456', (args) => {
+  C('login', '其他', '登录管理模式，支持交互登录或参数登录', 'login | login -u <用户> -p <密码>', (args) => {
     const parsed = parseLoginArgs(args);
     if (parsed.user && parsed.pass) {
       finishLogin(parsed.user, parsed.pass);
@@ -159,10 +159,10 @@ function registerAuthAndAdminCommands() {
     startInteractiveLogin();
   });
 
-  C('logout', '其他', '退出管理模式，回到 guest 浏览模式', 'logout', () => {
+  C('logout', '其他', '退出管理模式，回到 Guest 浏览模式', 'logout', () => {
     logoutSession();
     writeText('已退出。当前为 guest 浏览模式。', 'green');
-  });
+  }, { access: 'admin' });
 
   C('admin-help', '其他', '管理模式帮助', 'admin-help', () => {
     if (!isAdminNow()) {
@@ -172,12 +172,13 @@ function registerAuthAndAdminCommands() {
     writeHTML('<span class="green bold">管理模式命令</span>');
     writeText('goto manage  打开图形管理台：资料、头像与项目维护', 'dim');
     writeText('profile  查看 / 修改个人资料：profile set name=余浩 email=xx@x.com', 'dim');
+    writeText('blog     list/show/add/edit/del 博客内容', 'dim');
     writeText('awards   add/list/del 获奖记录：awards add "标题" -y 2025 -l 校级', 'dim');
     writeText('certs    add/list/del 证书：certs add "证书名" -i 机构 -y 2025 -u 图片URL', 'dim');
     writeText('avatar   set <图片URL|data:> 设置头像', 'dim');
     writeText('data     export/import 备份或恢复全部维护数据', 'dim');
-    writeText('profile reset 恢复默认；guest 无法使用以上命令', 'dim');
-  });
+    writeText('Guest 可用 blog/awards/certs 的 list/show，只能由 Admin 修改内容。', 'dim');
+  }, { access: 'admin' });
 
   /* ------- 资料 ------- */
   C('profile', '管理', '查看/修改个人资料', 'profile | profile set 字段=值 | profile reset', (args) => {
@@ -231,7 +232,7 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeText('用法：profile | profile set 字段=值 | profile reset', 'yellow');
-  });
+  }, { access: 'admin' });
 
   /* ------- 头像 ------- */
   C('avatar', '管理', '设置/查看头像图片', 'avatar set <图片URL> | avatar show | avatar clear', (args) => {
@@ -250,7 +251,7 @@ function registerAuthAndAdminCommands() {
       writeText('当前头像：' + (p.avatar || '未设置'));
       writeText('用法：avatar set <图片URL>（也支持 data:base64）', 'yellow');
     }
-  });
+  }, { access: 'admin' });
 
   /* ------- 数据备份 ------- */
   C('data', '管理', '导出或导入全部维护数据', 'data export | data import', (args) => {
@@ -275,10 +276,10 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeText('用法：data export | data import', 'yellow');
-  });
+  }, { access: 'admin' });
 
   /* ------- 博客（数据与 GUI 的 goto blog 页共享 profile.blogs） ------- */
-  C('blog', '管理', '博客维护（list/show/add/edit/del）', 'blog list | blog add "标题" -d 2026-09-01 | blog edit <id> | blog del <id>', (args) => {
+  C('blog', '管理', '博客维护（list/show/add/edit/del）', 'blog list | blog show <id> | blog add "标题" -d 2026-09-01 | blog edit <id> | blog del <id>', (args) => {
     const p = getProfile();
     const sub = (args[0] || 'list').toLowerCase();
     if (!isAdminNow() && sub !== 'list' && sub !== 'show') {
@@ -334,6 +335,10 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeText('用法：blog list | blog add "标题" -d 2026-09-01 | blog show <id> | blog del <id>', 'yellow');
+  }, {
+    access: 'mixed',
+    guestDesc: '浏览博客（list/show）',
+    guestUsage: 'blog list | blog show <id>',
   });
 
   /* ------- 获奖记录 ------- */
@@ -386,6 +391,10 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeText('用法：awards add/list/del', 'yellow');
+  }, {
+    access: 'mixed',
+    guestDesc: '浏览获奖记录（list）',
+    guestUsage: 'awards list',
   });
 
   /* ------- 证书 ------- */
@@ -439,6 +448,10 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeText('用法：certs add/list/del', 'yellow');
+  }, {
+    access: 'mixed',
+    guestDesc: '浏览证书记录（list）',
+    guestUsage: 'certs list',
   });
 
   /* ------- guest 只读展示 ------- */

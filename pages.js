@@ -106,6 +106,7 @@ function renderPage(route) {
   else if (route === 'docs') body.innerHTML = renderDocsPage();
   else if (route === 'manage') body.innerHTML = renderManagePage();
   else body.innerHTML = '';
+  bindPageEvents();
 }
 
 function escHtml(s) {
@@ -503,18 +504,22 @@ function cmdDocsHTML() {
   const categories = ['导航', '查看文件', '系统信息', '其他', '管理'];
   const group = (cat) => {
     const rows = Object.values(COMMANDS)
-      .filter((c) => c.cat === cat)
+      .filter((c) => c.cat === cat && (typeof commandVisible !== 'function' || commandVisible(c)))
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!rows.length) return '';
+    const categoryLabel = cat === '管理' && currentRole() !== 'admin' ? '公开内容（只读）' : cat;
     return (
       '<div class="docs-cat">' +
-      '<h3>' + escHtml(cat) + '</h3>' +
+      '<h3>' + escHtml(categoryLabel) + '</h3>' +
       rows
         .map(
           (c) =>
             '<div class="docs-row"><code>' + escHtml(c.name) + '</code>' +
-            '<span class="docs-desc">' + escHtml(c.desc) + '</span>' +
-            (c.usage ? '<span class="docs-usage">' + escHtml(c.usage) + '</span>' : '') +
+            '<span class="docs-desc">' + escHtml(typeof commandDescription === 'function' ? commandDescription(c) : c.desc) +
+            (c.access === 'mixed' ? (currentRole() === 'admin' ? ' [可维护]' : ' [只读]') : '') + '</span>' +
+            ((typeof commandUsage === 'function' ? commandUsage(c) : c.usage)
+              ? '<span class="docs-usage">' + escHtml(typeof commandUsage === 'function' ? commandUsage(c) : c.usage) + '</span>'
+              : '') +
             '</div>'
         )
         .join('') +
@@ -526,12 +531,15 @@ function cmdDocsHTML() {
 
 function renderDocsPage() {
   const p = getProfile();
+  const roleNotice = currentRole() === 'admin'
+    ? '<p>当前为 <strong>Admin 管理模式</strong>，可使用「管理」类命令，或进入内容管理页维护资料。</p>'
+    : '<p>当前为 <strong>Guest 只读模式</strong>，可浏览公开内容；输入 <code>login</code> 进入管理模式。</p>';
   return (
     profileHeader(p) +
     '<div class="gui-section-title">指令说明书 · Commands</div>' +
     '<div class="docs-intro">' +
     '<p>站点用终端命令驱动：<code>goto</code> 跳图形页面，其余命令在终端里漫游 / 维护。</p>' +
-    '<p>维护者：先 <code>login</code>（默认 admin / 123456），再使用「管理」类命令或在图形页内维护。</p>' +
+    roleNotice +
     '</div>' +
     cmdDocsHTML()
   );
@@ -751,8 +759,13 @@ function bindPageEvents() {
 if (typeof addCmd === 'function') {
   addCmd('goto', '导航', '跳转到图形页面：goto awards/certificates/resume/projects/terminal', 'goto <页面>', (args) => {
     const target = (args[0] || '').toLowerCase();
+    if ((target === 'manage' || target === 'admin') && currentRole() !== 'admin') {
+      writeText('goto: manage 仅管理员可用，请先输入 login', 'red');
+      return;
+    }
     if (!target || !ROUTES[target]) {
-      writeText('可用页面：awards · certificates · resume · projects · blog · docs · terminal（别名 t / home）', 'yellow');
+      const adminPage = currentRole() === 'admin' ? ' · manage' : '';
+      writeText('可用页面：awards · certificates · resume · projects · blog · docs · terminal' + adminPage + '（别名 t / home）', 'yellow');
       writeText('用法：goto blog | goto docs | goto terminal（或 goto t）', 'dim');
       return;
     }
@@ -762,9 +775,7 @@ if (typeof addCmd === 'function') {
 
 window.addEventListener('hashchange', () => {
   applyRouteView();
-  setTimeout(bindPageEvents, 0);
 });
 
 /* 初始路由 + 返回按钮 */
 applyRouteView();
-setTimeout(bindPageEvents, 0);
