@@ -124,6 +124,16 @@ function parseLoginArgs(args) {
   return { user, pass };
 }
 
+function storageFailureText(action) {
+  const detail = typeof getLastStorageError === 'function' ? getLastStorageError() : '';
+  return action + '失败，数据未保存' + (detail ? '：' + detail : '。');
+}
+
+function writeSaveResult(ok, successText, action = '保存') {
+  writeText(ok ? successText : storageFailureText(action), ok ? 'green' : 'red');
+  return ok;
+}
+
 /* ---------- 对外：注册到终端 ---------- */
 function registerAuthAndAdminCommands() {
   if (typeof addCmd !== "function") return;
@@ -164,6 +174,7 @@ function registerAuthAndAdminCommands() {
     writeText('awards   add/list/del 获奖记录：awards add "标题" -y 2025 -l 校级', 'dim');
     writeText('certs    add/list/del 证书：certs add "证书名" -i 机构 -y 2025 -u 图片URL', 'dim');
     writeText('avatar   set <图片URL|data:> 设置头像', 'dim');
+    writeText('data     export/import 备份或恢复全部维护数据', 'dim');
     writeText('profile reset 恢复默认；guest 无法使用以上命令', 'dim');
   });
 
@@ -184,8 +195,7 @@ function registerAuthAndAdminCommands() {
       return;
     }
     if (args[0] === 'reset') {
-      resetProfile();
-      writeText('个人资料已恢复默认。', 'green');
+      writeSaveResult(resetProfile(), '个人资料已恢复默认。', '重置');
       return;
     }
     if (args[0] === 'set') {
@@ -211,8 +221,7 @@ function registerAuthAndAdminCommands() {
         }
       });
       if (changed.length) {
-        saveProfile();
-        writeText('已更新：' + changed.join('；'), 'green');
+        writeSaveResult(saveProfile(), '已更新：' + changed.join('；'));
       } else {
         writeText('用法：profile set name=余浩 email=xx@x.com bio=…', 'yellow');
       }
@@ -230,16 +239,39 @@ function registerAuthAndAdminCommands() {
     const p = getProfile();
     if (args[0] === 'set' && args[1]) {
       p.avatar = args[1];
-      saveProfile();
-      writeText('头像已更新。', 'green');
+      writeSaveResult(saveProfile(), '头像已更新。');
     } else if (args[0] === 'clear') {
       p.avatar = '';
-      saveProfile();
-      writeText('头像已清除。', 'green');
+      writeSaveResult(saveProfile(), '头像已清除。');
     } else {
       writeText('当前头像：' + (p.avatar || '未设置'));
       writeText('用法：avatar set <图片URL>（也支持 data:base64）', 'yellow');
     }
+  });
+
+  /* ------- 数据备份 ------- */
+  C('data', '管理', '导出或导入全部维护数据', 'data export | data import', (args) => {
+    if (!isAdminNow()) {
+      writeText('只读模式：请先 login 进入管理模式。', 'red');
+      return;
+    }
+    const sub = (args[0] || '').toLowerCase();
+    if (sub === 'export') {
+      writeSaveResult(downloadProfileData(), '数据已导出为 JSON 文件。', '导出');
+      return;
+    }
+    if (sub === 'import') {
+      writeText('请选择 TermResume JSON 备份文件。', 'dim');
+      pickProfileImport().then((result) => {
+        if (result.cancelled) {
+          writeText('已取消导入。', 'dim');
+        } else {
+          writeSaveResult(result.ok, '数据导入成功；导入前的数据已保留为本地备份。', '导入');
+        }
+      });
+      return;
+    }
+    writeText('用法：data export | data import', 'yellow');
   });
 
   /* ------- 博客（数据与 GUI 的 goto blog 页共享 profile.blogs） ------- */
@@ -273,18 +305,16 @@ function registerAuthAndAdminCommands() {
       let title = '';
       let date = new Date().toISOString().slice(0, 10);
       const tags = [];
-      const content = [];
-      let i = 0;
-      for (; i < rest.length; i++) {
+      const titleParts = [];
+      for (let i = 0; i < rest.length; i++) {
         if (rest[i] === '-d') { date = rest[i + 1] || date; i++; }
         else if (rest[i] === '-t') { tags.push(...String(rest[i + 1] || '').split(',').map((s) => s.trim()).filter(Boolean)); i++; }
-        else break;
+        else titleParts.push(rest[i]);
       }
-      title = rest.slice(i).join(' ');
+      title = titleParts.join(' ');
       if (!title) { writeText('用法：blog add "标题" -d 2026-09-01 -t 标签', 'yellow'); return; }
-      p.blogs.push({ id: 'b' + Date.now(), title, date, tags, content: content.join('\n') });
-      saveProfile();
-      writeText('已创建博客。图形页：goto blog 继续编辑正文。', 'green');
+      p.blogs.push({ id: 'b' + Date.now(), title, date, tags, content: '' });
+      writeSaveResult(saveProfile(), '已创建博客。图形页：goto blog 继续编辑正文。');
       return;
     }
     if (sub === 'edit' || sub === 'del') {
@@ -294,8 +324,7 @@ function registerAuthAndAdminCommands() {
       if (!b) { writeText('未找到博客：' + id, 'red'); return; }
       if (sub === 'del') {
         p.blogs = (p.blogs || []).filter((x) => x.id !== id);
-        saveProfile();
-        writeText('已删除 ' + id + '。', 'green');
+        writeSaveResult(saveProfile(), '已删除 ' + id + '。', '删除');
       } else {
         writeText('终端里暂不支持长文编辑，请用图形页：goto blog → 打开文章 → 编辑。', 'yellow');
       }
@@ -306,12 +335,12 @@ function registerAuthAndAdminCommands() {
 
   /* ------- 获奖记录 ------- */
   C('awards', '管理', '获奖记录维护（add/list/del）', 'awards add "标题" -y 2025 -l 校级 -n 备注 | awards list | awards del id', (args) => {
-    if (!isAdminNow()) {
+    const sub = (args[0] || 'list').toLowerCase();
+    if (!isAdminNow() && sub !== 'list' && sub !== 'ls') {
       writeText('只读模式：请先 login 进入管理模式。', 'red');
       return;
     }
     const p = getProfile();
-    const sub = (args[0] || 'list').toLowerCase();
     if (sub === 'list' || sub === 'ls') {
       if (!p.awards.length) {
         writeText('（暂无获奖记录）', 'dim');
@@ -339,9 +368,8 @@ function registerAuthAndAdminCommands() {
         writeText('用法：awards add "标题" -y 2025 -l 校级 -n 备注', 'yellow');
         return;
       }
-      p.awards.push({ id: 'a' + Date.now(), title, year: y, level: lv, note });
-      saveProfile();
-      writeText('已添加获奖记录。', 'green');
+      p.awards.push({ id: 'a' + Date.now(), title, year: y, level: lv, note, image: '' });
+      writeSaveResult(saveProfile(), '已添加获奖记录。');
       return;
     }
     if (sub === 'del' || sub === 'rm') {
@@ -350,8 +378,7 @@ function registerAuthAndAdminCommands() {
       p.awards = p.awards.filter((a) => a.id !== id);
       if (p.awards.length === before) writeText('未找到 id：' + id, 'red');
       else {
-        saveProfile();
-        writeText('已删除 ' + id + '。', 'green');
+        writeSaveResult(saveProfile(), '已删除 ' + id + '。', '删除');
       }
       return;
     }
@@ -360,12 +387,12 @@ function registerAuthAndAdminCommands() {
 
   /* ------- 证书 ------- */
   C('certs', '管理', '证书维护（add/list/del）', 'certs add "证书名" -i 机构 -y 2025 -u 图片URL -n 备注 | certs list | certs del id', (args) => {
-    if (!isAdminNow()) {
+    const sub = (args[0] || 'list').toLowerCase();
+    if (!isAdminNow() && sub !== 'list' && sub !== 'ls') {
       writeText('只读模式：请先 login 进入管理模式。', 'red');
       return;
     }
     const p = getProfile();
-    const sub = (args[0] || 'list').toLowerCase();
     if (sub === 'list' || sub === 'ls') {
       if (!p.certificates.length) {
         writeText('（暂无证书）', 'dim');
@@ -395,8 +422,7 @@ function registerAuthAndAdminCommands() {
         return;
       }
       p.certificates.push({ id: 'c' + Date.now(), name, issuer, year: y, url, note });
-      saveProfile();
-      writeText('已添加证书。', 'green');
+      writeSaveResult(saveProfile(), '已添加证书。');
       return;
     }
     if (sub === 'del' || sub === 'rm') {
@@ -405,8 +431,7 @@ function registerAuthAndAdminCommands() {
       p.certificates = p.certificates.filter((c) => c.id !== id);
       if (p.certificates.length === before) writeText('未找到 id：' + id, 'red');
       else {
-        saveProfile();
-        writeText('已删除 ' + id + '。', 'green');
+        writeSaveResult(saveProfile(), '已删除 ' + id + '。', '删除');
       }
       return;
     }

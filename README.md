@@ -21,6 +21,7 @@ GitHub: <https://github.com/wuyudashui/TermResume>
   密码在输入与命令回显中都会打码。登出用 `logout`。
   admin 可维护个人资料、头像、获奖记录、证书与博客，修改保存在浏览器 localStorage；
   guest 看到的是维护后的内容（`resume` 命令与各图形页均可查看）。
+  建议定期使用 `data export` 导出 JSON 备份，需要恢复时使用 `data import`。
 
 ## 终端与图形页面（goto）
 
@@ -71,6 +72,12 @@ python -m http.server 8000
 打开后页面会先显示一段引导说明，随后播放开机画面并自动执行 `cat /etc/motd`，
 照着提示输入命令即可开始探索。
 
+关键数据与命令回归测试可直接运行：
+
+```bash
+node tests/stage-a.test.js
+```
+
 ## 推荐体验路径
 
 ```bash
@@ -107,6 +114,7 @@ sudo rm -rf /                               # 一个无伤大雅的彩蛋
 | 查看文件 | `cat [-n]` `head [-n]` `tail [-n]` |
 | 系统信息 | `neofetch` `whoami` `date` `uname` `uptime` `help` |
 | 其他 | `banner` `history` `echo` `clear` `sudo` `exit` |
+| 管理 | `login` `logout` `profile` `avatar` `awards` `certs` `blog` `data` |
 
 输入 `help <命令>`（例如 `help cd`）可以查看单个命令的用法说明。
 
@@ -209,6 +217,9 @@ guest: dir({}, {
 ├── pages.js       图形页与 goto 路由（awards/certs/resume/projects/blog/docs）
 ├── session.js     会话与履历数据层（guest/admin 角色、localStorage 持久化）
 ├── admin.js       认证与管理命令（login/logout/profile/awards/certs/avatar/blog/resume）
+├── PROJECT_PLAN.md 产品、架构与分阶段实施规划
+├── src/            奖项与证书等静态图片资源
+├── tests/          零依赖数据与命令回归测试
 └── README.md      本文档
 ```
 

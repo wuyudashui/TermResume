@@ -9,6 +9,7 @@
 
 const SESSION_KEY = 'guestos-session';
 const PROFILE_KEY = 'guestos-profile';
+const PROFILE_BACKUP_KEY = 'guestos-profile-backup';
 
 /* ---------- 会话状态 ---------- */
 let sessionUser = CONFIG.user; // guest / admin
@@ -77,28 +78,154 @@ function logoutSession() {
  * avatar 可存图片 URL 或 base64 data URL。
  */
 let profile = null;
+let lastStorageError = '';
+let lastSavedProfile = null;
 
 function cloneDefaults() {
   return JSON.parse(JSON.stringify(PROFILE_DEFAULTS));
 }
 
+function profileEnvelope(value) {
+  return {
+    schemaVersion: DATA_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    profile: value,
+  };
+}
+
+function normalizeProfile(value, sourceVersion = 0) {
+  const d = cloneDefaults();
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const normalized = { ...d, ...input };
+
+  normalized.name = typeof input.name === 'string' ? input.name : d.name;
+  normalized.role = typeof input.role === 'string' ? input.role : d.role;
+  normalized.bio = typeof input.bio === 'string' ? input.bio : d.bio;
+  normalized.email = typeof input.email === 'string' ? input.email : d.email;
+  normalized.github = typeof input.github === 'string' ? input.github : d.github;
+  normalized.website = typeof input.website === 'string' ? input.website : d.website;
+  normalized.location = typeof input.location === 'string' ? input.location : d.location;
+  normalized.avatar = typeof input.avatar === 'string' ? input.avatar : d.avatar;
+  normalized.awards = Array.isArray(input.awards) ? input.awards : d.awards;
+  normalized.certificates = Array.isArray(input.certificates) ? input.certificates : d.certificates;
+  normalized.blogs = Array.isArray(input.blogs) ? input.blogs : d.blogs;
+
+  /* 首次升级时只替换仓库自带的示例记录，不影响用户自己创建的内容。 */
+  if (sourceVersion < 1) {
+    const hasDemoAward = normalized.awards.some((a) => a && a.id === 'a1' && a.title === '示例奖项');
+    if (hasDemoAward) {
+      const defaultIds = new Set(d.awards.map((a) => a.id));
+      const customAwards = normalized.awards.filter(
+        (a) => !(a && a.id === 'a1' && a.title === '示例奖项') && !defaultIds.has(a && a.id)
+      );
+      normalized.awards = [...d.awards, ...customAwards];
+    }
+    normalized.certificates = normalized.certificates.filter(
+      (c) => !(c && c.id === 'c1' && c.name === '示例证书')
+    );
+    normalized.blogs = normalized.blogs.map((b) =>
+      b && b.id === 'b1' && !b.slug ? { ...b, slug: 'first-post' } : b
+    );
+  }
+
+  return normalized;
+}
+
+function parseProfilePayload(raw) {
+  const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('数据必须是一个 JSON 对象');
+  }
+  if (parsed.profile) {
+    const version = Number(parsed.schemaVersion) || 0;
+    if (version > DATA_SCHEMA_VERSION) {
+      throw new Error(`数据版本 ${version} 高于当前支持的版本 ${DATA_SCHEMA_VERSION}`);
+    }
+    return normalizeProfile(parsed.profile, version);
+  }
+  return normalizeProfile(parsed, 0);
+}
+
+function validateImportPayload(raw) {
+  const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('备份文件必须是一个 JSON 对象');
+  }
+  const candidate = parsed.profile || parsed;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new Error('备份文件缺少 profile 数据');
+  }
+  const knownFields = ['name', 'role', 'bio', 'email', 'awards', 'certificates', 'blogs'];
+  if (!knownFields.some((field) => Object.prototype.hasOwnProperty.call(candidate, field))) {
+    throw new Error('这不是有效的 TermResume 数据文件');
+  }
+  return parsed;
+}
+
+function blogFileName(blog, index, used) {
+  const base = String(blog.slug || blog.id || `post-${index + 1}`)
+    .trim()
+    .replace(/\.md$/i, '')
+    .replace(/[\\/:*?"<>|\s]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `post-${index + 1}`;
+  let name = base + '.md';
+  let suffix = 2;
+  while (used.has(name)) name = base + '-' + suffix++ + '.md';
+  used.add(name);
+  return name;
+}
+
+/* profile 是内容源，VFS 的 blog/ 只是终端浏览视图。 */
+function syncProfileToVfs() {
+  if (typeof VFS === 'undefined') return;
+  const home = VFS.home && VFS.home[CONFIG.user];
+  const blogDir = home && home.blog;
+  if (!blogDir || typeof dir !== 'function' || typeof file !== 'function') return;
+
+  Object.keys(blogDir).forEach((key) => {
+    if (key !== '_meta') delete blogDir[key];
+  });
+  const used = new Set();
+  (profile.blogs || []).forEach((blog, index) => {
+    const meta = [blog.date || '', ...(blog.tags || [])].filter(Boolean).join(' · ');
+    const lines = [
+      '# ' + (blog.title || '未命名文章'),
+      '',
+      ...(meta ? ['**' + meta + '**', ''] : []),
+      ...String(blog.content || '').replace(/\r\n/g, '\n').split('\n'),
+    ];
+    blogDir[blogFileName(blog, index, used)] = file(lines);
+  });
+}
+
 function loadProfile() {
+  let needsMigrationSave = false;
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    profile = raw ? JSON.parse(raw) : cloneDefaults();
-  } catch (_) {
+    if (raw) {
+      const stored = JSON.parse(raw);
+      const storedVersion = stored && stored.profile ? Number(stored.schemaVersion) || 0 : 0;
+      profile = parseProfilePayload(stored);
+      needsMigrationSave = !stored.profile || storedVersion < DATA_SCHEMA_VERSION;
+    } else {
+      profile = cloneDefaults();
+    }
+    lastStorageError = '';
+  } catch (error) {
     profile = cloneDefaults();
+    lastStorageError = error instanceof Error ? error.message : String(error);
   }
-  // 保证必要字段存在
-  const d = PROFILE_DEFAULTS;
-  profile.name = profile.name || d.name;
-  profile.role = profile.role || d.role;
-  profile.email = profile.email || d.email;
-  profile.github = profile.github || d.github;
-  profile.awards = Array.isArray(profile.awards) ? profile.awards : [];
-  profile.certificates = Array.isArray(profile.certificates) ? profile.certificates : [];
-  profile.blogs = Array.isArray(profile.blogs) ? profile.blogs : [];
   applyProfileToConfig();
+  syncProfileToVfs();
+  lastSavedProfile = JSON.parse(JSON.stringify(profile));
+  if (needsMigrationSave) {
+    try {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(profileEnvelope(profile)));
+    } catch (error) {
+      lastStorageError = '旧数据已读取，但升级结果无法保存：' +
+        (error instanceof Error ? error.message : String(error));
+    }
+  }
   return profile;
 }
 
@@ -115,12 +242,21 @@ function applyProfileToConfig() {
 
 function saveProfile() {
   try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  } catch (_) {
-    /* 图片过大会超出 localStorage 配额，前端演示阶段提示即可 */
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profileEnvelope(profile)));
+    lastStorageError = '';
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    if (lastSavedProfile) profile = JSON.parse(JSON.stringify(lastSavedProfile));
+    applyProfileToConfig();
+    syncProfileToVfs();
+    emitProfileChange();
+    return false;
   }
   applyProfileToConfig();
+  syncProfileToVfs();
+  lastSavedProfile = JSON.parse(JSON.stringify(profile));
   emitProfileChange();
+  return true;
 }
 
 function getProfile() {
@@ -130,7 +266,75 @@ function getProfile() {
 
 function resetProfile() {
   profile = cloneDefaults();
-  saveProfile();
+  return saveProfile();
+}
+
+function getLastStorageError() {
+  return lastStorageError;
+}
+
+function exportProfileJson() {
+  return JSON.stringify(profileEnvelope(getProfile()), null, 2);
+}
+
+function downloadProfileData() {
+  try {
+    const blob = new Blob([exportProfileJson()], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `termresume-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    return true;
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    return false;
+  }
+}
+
+function importProfileData(raw) {
+  let imported;
+  try {
+    imported = parseProfilePayload(validateImportPayload(raw));
+  } catch (error) {
+    lastStorageError = error instanceof Error ? error.message : String(error);
+    return false;
+  }
+
+  try {
+    localStorage.setItem(PROFILE_BACKUP_KEY, JSON.stringify(profileEnvelope(getProfile())));
+  } catch (error) {
+    lastStorageError = '无法创建导入前备份：' + (error instanceof Error ? error.message : String(error));
+    return false;
+  }
+  profile = imported;
+  if (!saveProfile()) {
+    return false;
+  }
+  return true;
+}
+
+function pickProfileImport() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const selected = input.files && input.files[0];
+      if (!selected) { resolve({ ok: false, cancelled: true }); return; }
+      try {
+        const ok = importProfileData(await selected.text());
+        resolve({ ok, cancelled: false, error: ok ? '' : getLastStorageError() });
+      } catch (error) {
+        lastStorageError = error instanceof Error ? error.message : String(error);
+        resolve({ ok: false, cancelled: false, error: lastStorageError });
+      }
+    };
+    input.click();
+  });
 }
 
 /* 变化通知：terminal.js 会注册一个“刷新全部界面”的回调 */

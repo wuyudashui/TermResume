@@ -169,32 +169,8 @@ const VFS = dir(
             }),
           }),
 
-          blog: dir({}, {
-            'first-post.md': file([
-              '# blog/first-post.md',
-              '',
-              '**2026-09-03 · 第一篇博客**',
-              '',
-              '为什么把个人主页做成终端？',
-              '',
-              '因为"访问一个人的主页"这件事，',
-              '本质上和在一台陌生机器上浏览目录很像：',
-              'README 是说明书，about.md 是自我介绍，',
-              'projects/ 里装着他做过的东西。',
-              '',
-              '既然如此，为什么不直接做成目录？',
-            ]),
-            'linux-cli-tips.md': file([
-              '# blog/linux-cli-tips.md',
-              '',
-              '**2026-08-20 · 几个实用的 Linux 小技巧**',
-              '',
-              '1. `cd -` 可以回到上一次所在的目录',
-              '2. `ls -la` 才能看到隐藏文件',
-              '3. `tree` 可以直观查看目录层级',
-              '4. 想不起来命令？先 `history` 再 `grep`',
-            ]),
-          }),
+          /* 博客文件由 session.js 根据 profile.blogs 动态生成。 */
+          blog: dir({}, {}),
 
           notes: dir({}, {
             'linux-cheatsheet.md': file([

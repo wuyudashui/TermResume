@@ -285,6 +285,7 @@ function setText(id, value) {
 /* 标题与顶部品牌：全部跟随 config，避免写死 user@host / GuestOS */
 function initTitles() {
   const ps = activeRole() === 'admin' ? '#' : '$';
+  const admin = activeRole() === 'admin';
   if (liveUserEl) liveUserEl.textContent = activeUser();
   const liveAtEl = document.querySelector('.cmdline .p-at');
   const liveColonEl = document.querySelector('.cmdline .p-colon');
@@ -296,7 +297,10 @@ function initTitles() {
   if (titleEl) titleEl.textContent = `${activeUser()}@${CONFIG.host}: ~`;
   document.title = `${activeUser()}@${CONFIG.host}: ~ — 个人主页`;
   const brandEl = document.getElementById('app-brand-name');
-  if (brandEl) brandEl.textContent = CONFIG.osName + ' · 终端主页';
+  if (brandEl) brandEl.textContent = CONFIG.name + ' · TERMRESUME';
+  setText('session-tag', admin ? 'admin' : 'zsh');
+  setText('session-status', admin ? 'ADMIN · 本地维护会话' : 'NORMAL · 虚拟只读系统');
+  document.documentElement.setAttribute('data-role', admin ? 'admin' : 'guest');
 }
 
 /* 登录 / 登出 / 资料变化后刷新全部展示 */
@@ -394,8 +398,14 @@ function nameBlockHTML() {
     ? '<pre class="name-banner">' + banner.join('\n') + '</pre>'
     : '<div class="hero-title">' + esc(CONFIG.name || 'Welcome') + '</div>';
   return (
+    '<section class="identity-block">' +
+    '<div class="identity-kicker"><span>~/identity</span><i></i><span>PUBLIC PROFILE</span></div>' +
     title +
-    '<div class="hero-sub">一个可以 cd / ls / cat 的终端个人主页</div>'
+    '<div class="identity-footer">' +
+    '<strong>' + esc(CONFIG.name) + ' / ' + esc(CONFIG.asciiName) + '</strong>' +
+    '<span>' + esc(CONFIG.title) + ' · 成都理工大学</span>' +
+    '</div>' +
+    '</section>'
   );
 }
 
@@ -434,24 +444,27 @@ function renderNeo() {
     ['docs', '说明书'],
   ];
   const links =
+    '<div class="command-deck"><div class="command-deck-title"><span>QUICK ACCESS</span><span>点击或输入 goto</span></div>' +
     '<div class="hero-links">' +
     items
       .map(
-        (it) =>
+        (it, index) =>
           '<a class="hero-link" data-cmd="goto ' + esc(it[0]) + '" href="#/' + it[0] + '">' +
-          esc(it[0]) + '</a>'
+          '<span class="hero-link-index">0' + (index + 1) + '</span>' +
+          '<span><b>' + esc(it[0]) + '</b><small>' + esc(it[1]) + '</small></span></a>'
       )
       .join('') +
     (p.github
-      ? '<a class="hero-link" href="https://github.com/' + esc(p.github) + '" target="_blank" rel="noopener noreferrer">GitHub</a>'
+      ? '<a class="hero-link external" href="https://github.com/' + esc(p.github) + '" target="_blank" rel="noopener noreferrer"><span class="hero-link-index">↗</span><span><b>GitHub</b><small>源代码</small></span></a>'
       : '') +
-    '</div>';
+    '</div></div>';
 
   return (
-    '<div class="hero">' +
-    '<pre class="tux">' + tuxArt() + '</pre>' +
-    '<div><div class="meta">' + meta + '</div>' + links + '</div>' +
-    '</div>'
+    '<section class="hero">' +
+    '<div class="hero-system"><div class="hero-system-label">SYSTEM AVATAR</div><pre class="tux">' + tuxArt() + '</pre><span>STATUS / ONLINE</span></div>' +
+    '<div class="hero-data"><div class="hero-system-label">SYSTEM PROFILE</div><div class="meta">' + meta + '</div></div>' +
+    '<div class="hero-note"><div class="hero-system-label">README.EXCERPT</div><p>' + esc(p.bio || '保持好奇，把想法变成可以运行的东西。') + '</p><span class="hero-note-sign">— ' + esc(CONFIG.name) + '</span></div>' +
+    '</section>' + links
   );
 }
 
@@ -1200,6 +1213,13 @@ function bootRow(label, text, cls) {
 
 /* 页面打开后立刻显示：说明这块页面怎么玩 */
 function showIntro() {
+  const compactViewport = typeof matchMedia === 'function' && matchMedia('(max-width: 620px)').matches;
+  if (compactViewport) {
+    writeHTML(`<span class="green bold">${esc(activeUser())}@${esc(CONFIG.host)} · YUHAO / TERMRESUME</span>`);
+    writeHTML('<span class="dim">终端已连接。浏览快捷入口，或输入 <span class="cyan">help</span>。</span>');
+    blankLine();
+    return;
+  }
   writeHTML(
     '<span class="dim">' + '─'.repeat(44) + '</span>'
   );
@@ -1243,17 +1263,21 @@ function autoTypeCommand(word) {
 async function boot() {
   /* 让提示符与窗口标题跟随 data.js 里的 CONFIG */
   initTitles();
+  const compactViewport = typeof matchMedia === 'function' && matchMedia('(max-width: 620px)').matches;
 
-  const lines = [
+  const fullLines = [
     ['  OK  ', `正在启动 ${CONFIG.osName} 个人主页系统…`, 'green'],
     ['  OK  ', '正在挂载虚拟文件系统 /', 'green'],
     ['  OK  ', `已载入用户资料 ${esc(activeUser())}@${esc(CONFIG.host)}`, 'green'],
     ['  OK  ', 'Reached target Multi-User System.', 'green'],
     [' INFO ', '已打开会话 /dev/pts/1（只读演示模式）', 'yellow'],
   ];
+  const lines = compactViewport
+    ? [fullLines[1], fullLines[4]]
+    : fullLines;
   for (const [label, text, cls] of lines) {
     bootRow(label, text, cls);
-    await sleep(210);
+    await sleep(compactViewport ? 80 : 210);
     if (skipBoot) break;
   }
   blankLine();
@@ -1267,8 +1291,13 @@ async function boot() {
   scrollDown();
 
   if (!skipBoot) {
-    await sleep(350);
-    autoTypeCommand('cat /etc/motd');
+    if (compactViewport) {
+      writeHTML('<span class="mobile-ready"><span class="green">READY</span> 输入 <span class="cyan">help</span> 开始探索，或点击上方快捷入口。</span>');
+      screenEl.scrollTop = 0;
+    } else {
+      await sleep(350);
+      autoTypeCommand('cat /etc/motd');
+    }
   } else {
     writeHTML('<span class="dim">— 启动已跳过，随时输入 help 查看命令 —</span>');
   }

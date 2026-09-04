@@ -15,18 +15,24 @@
 
   <header class="app-bar">
     <div class="app-brand">
-      <div class="app-logo" aria-hidden="true">&gt;_</div>
+      <div class="app-logo" aria-hidden="true">YH</div>
       <div class="app-title">
-        <strong id="app-brand-name">TermResume · 终端风格动态简历</strong>
-        <span>Terminal Resume · Interactive Homepage</span>
+        <strong id="app-brand-name">余浩 · TERMRESUME</strong>
+        <span>PERSONAL WORKSTATION / 2026</span>
       </div>
     </div>
-    <div class="theme-box">
-      <span class="theme-label">外观</span>
-      <button class="mode-toggle" id="mode-toggle" type="button" aria-pressed="false">
-        <span class="mode-icon" id="mode-icon" aria-hidden="true">☾</span>
-        <span class="mode-text" id="mode-text">黑夜模式</span>
-      </button>
+    <div class="app-actions">
+      <div class="availability" aria-label="站点状态">
+        <i aria-hidden="true"></i>
+        <span>OPEN TO CONNECT</span>
+      </div>
+      <div class="theme-box">
+        <span class="theme-label">DISPLAY</span>
+        <button class="mode-toggle" id="mode-toggle" type="button" aria-pressed="false" title="切换昼夜主题">
+          <span class="mode-icon" id="mode-icon" aria-hidden="true">☾</span>
+          <span class="mode-text" id="mode-text">黑夜模式</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -40,7 +46,7 @@
         <i class="light green"></i>
       </div>
       <h1 class="term-title">guest@my-linux: ~</h1>
-      <div class="term-tag" aria-hidden="true">zsh</div>
+      <div class="term-tag" id="session-tag" aria-hidden="true">zsh</div>
     </header>
 
     <section class="term-screen" id="screen" aria-live="polite">
@@ -65,7 +71,7 @@
     </form>
 
     <footer class="term-status">
-      <span class="st-left"><i class="st-dot"></i> NORMAL · 虚拟只读系统</span>
+      <span class="st-left"><i class="st-dot"></i><span id="session-status">NORMAL · 虚拟只读系统</span></span>
       <span class="st-right"><span id="clock">--:--:--</span></span>
     </footer>
       </main>

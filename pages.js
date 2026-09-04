@@ -107,6 +107,31 @@ function escHtml(s) {
   })[ch]);
 }
 
+let pageNotice = null;
+
+function setPageNotice(message, type = 'error') {
+  pageNotice = { message, type };
+}
+
+function takePageNotice() {
+  if (!pageNotice) return '';
+  const notice = pageNotice;
+  pageNotice = null;
+  return '<div class="page-notice ' + escHtml(notice.type) + '" role="status">' +
+    escHtml(notice.message) + '</div>';
+}
+
+function pageStorageFailure(action) {
+  const detail = typeof getLastStorageError === 'function' ? getLastStorageError() : '';
+  return action + '失败，数据未保存' + (detail ? '：' + detail : '。');
+}
+
+function saveFromPage(successText, action = '保存') {
+  const ok = saveProfile();
+  setPageNotice(ok ? successText : pageStorageFailure(action), ok ? 'success' : 'error');
+  return ok;
+}
+
 function profileHeader(p) {
   return (
     '<div class="gui-hero">' +
@@ -196,6 +221,7 @@ function renderBlogPage() {
   if (blogState.view === 'read' && blogState.id) {
     const b = (p.blogs || []).find((x) => x.id === blogState.id);
     return (
+      takePageNotice() +
       '<div class="blog-toolbar">' +
       '<button class="page-mini-back" data-blog-back type="button">← 返回时间线</button>' +
       (admin
@@ -217,6 +243,7 @@ function renderBlogPage() {
       : { title: '', date: new Date().toISOString().slice(0, 10), tags: [], content: '' };
     if (blogState.id && !b) blogState = { view: 'list', id: null, edit: false };
     return (
+      takePageNotice() +
       '<div class="blog-editor">' +
       '<div class="blog-toolbar"><button class="page-mini-back" data-blog-cancel type="button">← 取消</button></div>' +
       '<label>标题 <input id="be-title" value="' + escHtml(b.title || '') + '" /></label>' +
@@ -246,6 +273,7 @@ function renderBlogPage() {
     : '';
 
   return (
+    takePageNotice() +
     profileHeader(p) +
     '<div class="blog-bar">' +
     '<div class="gui-section-title">博客时间线 · Blog</div>' +
@@ -261,6 +289,9 @@ function renderAwardsPage() {
   const list = (p.awards || [])
     .map((a) =>
       '<article class="gui-card">' +
+      (a.image
+        ? '<img class="gui-award-img" src="' + escHtml(a.image) + '" alt="' + escHtml(a.title) + ' 获奖证明" loading="lazy" />'
+        : '') +
       '<div class="gui-card-year">' + escHtml(a.year || '—') + '</div>' +
       '<h3>' + escHtml(a.title) + '</h3>' +
       (a.level ? '<div class="gui-tag">' + escHtml(a.level) + '</div>' : '') +
@@ -284,6 +315,7 @@ function renderAwardsPage() {
     : '';
 
   return (
+    takePageNotice() +
     profileHeader(p) +
     '<div class="gui-section-title">奖项 · Awards</div>' +
     (list ? '<div class="gui-grid">' + list + '</div>' : '<div class="gui-empty">（暂无获奖记录）</div>') +
@@ -328,6 +360,7 @@ function renderCertsPage() {
     : '';
 
   return (
+    takePageNotice() +
     profileHeader(p) +
     '<div class="gui-section-title">证书 · Certificates</div>' +
     (list ? '<div class="gui-grid">' + list + '</div>' : '<div class="gui-empty">（暂无证书）</div>') +
@@ -368,6 +401,7 @@ function renderResumePage() {
     : '<div class="gui-empty">（暂无证书）</div>';
 
   return (
+    takePageNotice() +
     profileHeader(p) +
     '<div class="gui-section-title">个人履历 · Resume</div>' +
     '<section class="resume-panel">' +
@@ -406,6 +440,7 @@ function renderProjectsPage() {
       .join('');
   }
   return (
+    takePageNotice() +
     profileHeader(getProfile()) +
     '<div class="gui-section-title">项目 · Projects</div>' +
     (cards ? '<div class="gui-grid">' + cards + '</div>' : '<div class="gui-empty">（项目目录为空）</div>')
@@ -471,23 +506,27 @@ function bindPageEvents() {
       blogState = { view: 'list', id: null, edit: false };
       renderPage(normalizeHash());
     } else if (editB) {
+      if (currentRole() !== 'admin') return;
       blogState = { view: 'edit', id: editB.getAttribute('data-blog-edit'), edit: true };
       renderPage(normalizeHash());
     } else if (delB) {
+      if (currentRole() !== 'admin') return;
       const p = getProfile();
       p.blogs = (p.blogs || []).filter((x) => x.id !== delB.getAttribute('data-blog-del'));
-      saveProfile();
+      saveFromPage('博客已删除。', '删除');
       blogState = { view: 'list', id: null, edit: false };
       renderPage(normalizeHash());
     } else if (delA) {
+      if (currentRole() !== 'admin') return;
       const p = getProfile();
       p.awards = p.awards.filter((x) => x.id !== delA.getAttribute('data-del-award'));
-      saveProfile();
+      saveFromPage('获奖记录已删除。', '删除');
       renderPage(normalizeHash());
     } else if (delC) {
+      if (currentRole() !== 'admin') return;
       const p = getProfile();
       p.certificates = p.certificates.filter((x) => x.id !== delC.getAttribute('data-del-cert'));
-      saveProfile();
+      saveFromPage('证书已删除。', '删除');
       renderPage(normalizeHash());
     }
   };
@@ -495,6 +534,7 @@ function bindPageEvents() {
   const newB = document.getElementById('blog-new');
   if (newB) {
     newB.onclick = () => {
+      if (currentRole() !== 'admin') return;
       blogState = { view: 'edit', id: null, edit: true };
       renderPage(normalizeHash());
     };
@@ -502,6 +542,7 @@ function bindPageEvents() {
   const saveB = document.getElementById('be-save');
   if (saveB) {
     saveB.onclick = () => {
+      if (currentRole() !== 'admin') return;
       const p = getProfile();
       const title = (document.getElementById('be-title') || {}).value || '';
       if (!title.trim()) return;
@@ -517,7 +558,7 @@ function bindPageEvents() {
       } else {
         p.blogs.push({ id: 'b' + Date.now(), title: title.trim(), date, tags, content });
       }
-      saveProfile();
+      saveFromPage('博客已保存。');
       const saved = blogState.id || (p.blogs[p.blogs.length - 1] && p.blogs[p.blogs.length - 1].id);
       blogState = { view: saved ? 'read' : 'list', id: saved, edit: false };
       renderPage(normalizeHash());
@@ -527,6 +568,7 @@ function bindPageEvents() {
   const addA = document.getElementById('f-a-add');
   if (addA) {
     addA.onclick = () => {
+      if (currentRole() !== 'admin') return;
       const title = (document.getElementById('f-a-title') || {}).value || '';
       if (!title.trim()) return;
       const p = getProfile();
@@ -536,14 +578,16 @@ function bindPageEvents() {
         year: (document.getElementById('f-a-year') || {}).value || '',
         level: (document.getElementById('f-a-level') || {}).value || '',
         note: (document.getElementById('f-a-note') || {}).value || '',
+        image: '',
       });
-      saveProfile();
+      saveFromPage('获奖记录已添加。');
       renderPage(normalizeHash());
     };
   }
   const addC = document.getElementById('f-c-add');
   if (addC) {
     addC.onclick = () => {
+      if (currentRole() !== 'admin') return;
       const name = (document.getElementById('f-c-name') || {}).value || '';
       if (!name.trim()) return;
       const p = getProfile();
@@ -555,7 +599,7 @@ function bindPageEvents() {
         url: (document.getElementById('f-c-url') || {}).value || '',
         note: '',
       });
-      saveProfile();
+      saveFromPage('证书已添加。');
       renderPage(normalizeHash());
     };
   }

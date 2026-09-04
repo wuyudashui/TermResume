@@ -21,38 +21,53 @@ const AUTH = {
   password: '123456',
 };
 
-/* 履历默认数据：首次进入或重置后以此为准，admin 的修改保存在浏览器 localStorage */
-const PROFILE_DEFAULTS = {
+const DATA_SCHEMA_VERSION = 1;
+
+/* 个人资料的唯一默认来源：CONFIG 与可维护 Profile 都从这里初始化。 */
+const IDENTITY_DEFAULTS = Object.freeze({
   name: '余浩',
-  role: '在校学生',
+  title: '在校学生',
   bio: '一个喜欢把想法做成终端的在校学生。',
   email: '2442078047@qq.com',
   github: 'wuyudashui',
   website: '',
   location: '',
-  avatar: '', // 图片 URL 或 base64，留空则显示默认企鹅
+  avatar: '',
+});
+
+/* 履历默认数据：首次进入或重置后以此为准，admin 的修改保存在浏览器 localStorage */
+const PROFILE_DEFAULTS = {
+  name: IDENTITY_DEFAULTS.name,
+  role: IDENTITY_DEFAULTS.title,
+  bio: IDENTITY_DEFAULTS.bio,
+  email: IDENTITY_DEFAULTS.email,
+  github: IDENTITY_DEFAULTS.github,
+  website: IDENTITY_DEFAULTS.website,
+  location: IDENTITY_DEFAULTS.location,
+  avatar: IDENTITY_DEFAULTS.avatar,
   awards: [
     {
-      id: 'a1',
-      title: '示例奖项',
-      year: '2025',
-      level: '校级',
-      note: '这是一个示例，可在 admin 模式下维护。',
+      id: 'a-lqb-python-2026',
+      title: '第十七届蓝桥杯全国大学生软件和信息技术大赛',
+      year: '2026',
+      level: '全国总决赛二等奖',
+      note: '软件赛 Python 程序设计大学 B 组',
+      image: 'src/awards/lqb_python_second.jpg',
     },
-  ],
-  certificates: [
     {
-      id: 'c1',
-      name: '示例证书',
-      issuer: '某某机构',
-      year: '2025',
-      url: '',
-      note: '可在 admin 模式下维护或上传图片。',
+      id: 'a-mtb-2026',
+      title: '第八届码蹄杯程序设计大赛',
+      year: '2026',
+      level: '本科院校赛道国赛铜奖',
+      note: '',
+      image: 'src/awards/mtb_third.jpg',
     },
   ],
+  certificates: [],
   blogs: [
     {
       id: 'b1',
+      slug: 'first-post',
       title: '你好，博客',
       date: '2026-09-01',
       tags: ['随笔'],
@@ -67,14 +82,14 @@ const CONFIG = {
   host: '001',                 // 终端主机名
   home: '/home/guest',              // 用户主目录（一般不用改）
 
-  name: '余浩',                     // 你的名字 / 昵称
+  name: IDENTITY_DEFAULTS.name,      // 你的名字 / 昵称
   asciiName: 'YUHAO',               // 终端里的大写字符画
-  title: '在校学生',                 // 身份/方向（以后可细化）
-  location: '',                     // 所在地，例如 '成都，中国'；留空则不显示
+  title: IDENTITY_DEFAULTS.title,    // 身份/方向（以后可细化）
+  location: IDENTITY_DEFAULTS.location,
 
-  email: '2442078047@qq.com',       // 邮箱
-  website: '',                      // 个人网址，例如 https://example.com；暂无则留空
-  github: 'wuyudashui',             // GitHub 用户名
+  email: IDENTITY_DEFAULTS.email,
+  website: IDENTITY_DEFAULTS.website,
+  github: IDENTITY_DEFAULTS.github,
 
   timezone: 'Asia/Shanghai',       // 时区（必须是 IANA 名称，例如 Asia/Shanghai）
   osName: 'TermResumeOS',               // 虚拟系统名
