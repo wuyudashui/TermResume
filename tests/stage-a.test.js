@@ -130,7 +130,7 @@ function value(context, expression) {
   assert.equal(value(context, 'VFS.home[CONFIG.user].blog["first-post.md"].content[0]'), '# 你好，博客');
   assert.equal(value(context, 'getProfile().school'), '成都理工大学');
   assert.equal(value(context, 'getProfile().projects.length'), 3);
-  assert.equal(JSON.parse(value(context, 'exportProfileJson()')).schemaVersion, 4);
+  assert.equal(JSON.parse(value(context, 'exportProfileJson()')).schemaVersion, 5);
 }
 
 {
@@ -152,7 +152,7 @@ function value(context, expression) {
   assert.equal(value(context, 'getProfile().blogs[0].slug'), 'first-post');
   assert.equal(value(context, 'getProfile().school'), '成都理工大学');
   assert.equal(value(context, 'getProfile().projects.length'), 3);
-  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 4);
+  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 5);
 }
 
 {
@@ -171,7 +171,24 @@ function value(context, expression) {
   assert.equal(value(context, 'getProfile().awards.length'), 5);
   assert.equal(value(context, 'getProfile().awards.filter((a) => a.id === "a-icm-2026").length'), 1);
   assert.equal(value(context, 'getProfile().awards.some((a) => a.id === "custom")'), true);
-  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 4);
+  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 5);
+}
+
+{
+  const incompleteVersionFour = {
+    schemaVersion: 4,
+    profile: {
+      name: '缓存异常用户',
+      awards: [{ id: 'a-lqb-python-2026', title: '已有奖项' }],
+    },
+  };
+  const context = createContext(createStorage({ 'guestos-profile': JSON.stringify(incompleteVersionFour) }));
+  runFiles(context, ['config.js', 'data.js', 'session.js']);
+  assert.equal(value(context, 'getProfile().awards.length'), 4);
+  assert.equal(value(context, 'getProfile().awards.some((a) => a.id === "a-icm-2026")'), true);
+  assert.equal(value(context, 'getProfile().awards.some((a) => a.id === "a-cmc-2025")'), true);
+  assert.equal(value(context, 'getProfile().awards.some((a) => a.id === "a-cccc-2026")'), true);
+  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 5);
 }
 
 {

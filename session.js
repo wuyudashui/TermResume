@@ -158,8 +158,8 @@ function normalizeProfile(value, sourceVersion = 0) {
     normalized.projects = d.projects;
   }
 
-  /* v4 发布三项新奖项；只补充新 ID，保留用户已有、修改或删除的其他记录。 */
-  if (sourceVersion < 4) {
+  /* v5 重新执行奖项发布迁移，修复部署期间新旧缓存混用导致的漏项。 */
+  if (sourceVersion < 5) {
     const addedAwardIds = new Set(['a-icm-2026', 'a-cmc-2025', 'a-cccc-2026']);
     const existingAwardIds = new Set(normalized.awards.map((award) => award && award.id));
     const newDefaultAwards = d.awards.filter(

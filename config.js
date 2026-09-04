@@ -27,7 +27,7 @@ const API_CONFIG = Object.freeze({
   timeoutMs: 10000,
 });
 
-const DATA_SCHEMA_VERSION = 4;
+const DATA_SCHEMA_VERSION = 5;
 
 /* 个人资料的唯一默认来源：CONFIG 与可维护 Profile 都从这里初始化。 */
 const IDENTITY_DEFAULTS = Object.freeze({
