@@ -16,10 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,10 +27,25 @@ jobs:
         with:
           enablement: true
 
+      - name: Prepare static site
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html style.css ./*.js .nojekyll _site/
+          cp -R src _site/src
+
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
 
       - name: Deploy to GitHub Pages
         id: deployment
