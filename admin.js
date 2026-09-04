@@ -96,7 +96,7 @@ function finishLogin(user, pass) {
   const ok = loginWithCredential(user, pass);
   if (ok) {
     writeText('✅ 登录成功：' + user + '（管理模式）', 'green');
-    writeText('提示：输入 admin-help 查看可维护的内容。', 'dim');
+    writeText('输入 goto manage 打开图形管理台，或输入 admin-help 查看管理命令。', 'dim');
   } else {
     writeText('❌ 登录失败：用户名或密码错误（默认 admin / 123456）', 'red');
     /* 重新从密码阶段开始，用户名保持不变 */
@@ -170,6 +170,7 @@ function registerAuthAndAdminCommands() {
       return;
     }
     writeHTML('<span class="green bold">管理模式命令</span>');
+    writeText('goto manage  打开图形管理台：资料、头像与项目维护', 'dim');
     writeText('profile  查看 / 修改个人资料：profile set name=余浩 email=xx@x.com', 'dim');
     writeText('awards   add/list/del 获奖记录：awards add "标题" -y 2025 -l 校级', 'dim');
     writeText('certs    add/list/del 证书：certs add "证书名" -i 机构 -y 2025 -u 图片URL', 'dim');
@@ -188,6 +189,7 @@ function registerAuthAndAdminCommands() {
     if (!args.length || args[0] === 'show') {
       writeText('姓名    ' + p.name);
       writeText('身份    ' + p.role);
+      writeText('学校    ' + (p.school || '未设置'));
       writeText('邮箱    ' + p.email);
       writeText('GitHub  ' + p.github);
       writeText('简介    ' + p.bio);
@@ -203,6 +205,7 @@ function registerAuthAndAdminCommands() {
       const fieldMap = {
         name: 'name', 姓名: 'name',
         role: 'role', 身份: 'role', title: 'role',
+        school: 'school', 学校: 'school',
         bio: 'bio', 简介: 'bio',
         email: 'email', 邮箱: 'email',
         github: 'github',
@@ -223,7 +226,7 @@ function registerAuthAndAdminCommands() {
       if (changed.length) {
         writeSaveResult(saveProfile(), '已更新：' + changed.join('；'));
       } else {
-        writeText('用法：profile set name=余浩 email=xx@x.com bio=…', 'yellow');
+        writeText('用法：profile set name=余浩 school=学校名称 email=xx@x.com bio=…', 'yellow');
       }
       return;
     }

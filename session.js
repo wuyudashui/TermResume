@@ -100,12 +100,14 @@ function normalizeProfile(value, sourceVersion = 0) {
 
   normalized.name = typeof input.name === 'string' ? input.name : d.name;
   normalized.role = typeof input.role === 'string' ? input.role : d.role;
+  normalized.school = typeof input.school === 'string' ? input.school : d.school;
   normalized.bio = typeof input.bio === 'string' ? input.bio : d.bio;
   normalized.email = typeof input.email === 'string' ? input.email : d.email;
   normalized.github = typeof input.github === 'string' ? input.github : d.github;
   normalized.website = typeof input.website === 'string' ? input.website : d.website;
   normalized.location = typeof input.location === 'string' ? input.location : d.location;
   normalized.avatar = typeof input.avatar === 'string' ? input.avatar : d.avatar;
+  normalized.projects = Array.isArray(input.projects) ? input.projects : d.projects;
   normalized.awards = Array.isArray(input.awards) ? input.awards : d.awards;
   normalized.certificates = Array.isArray(input.certificates) ? input.certificates : d.certificates;
   normalized.blogs = Array.isArray(input.blogs) ? input.blogs : d.blogs;
@@ -126,6 +128,18 @@ function normalizeProfile(value, sourceVersion = 0) {
     normalized.blogs = normalized.blogs.map((b) =>
       b && b.id === 'b1' && !b.slug ? { ...b, slug: 'first-post' } : b
     );
+  }
+
+  /* v2 增加学校字段，并升级未被用户改写过的默认身份文案。 */
+  if (sourceVersion < 2) {
+    if (!input.school) normalized.school = d.school;
+    if (input.role === '在校学生') normalized.role = d.role;
+    if (input.bio === '一个喜欢把想法做成终端的在校学生。') normalized.bio = d.bio;
+  }
+
+  /* v3 将项目纳入可维护 Profile，旧数据自动继承配置中的默认项目。 */
+  if (sourceVersion < 3 && !Array.isArray(input.projects)) {
+    normalized.projects = d.projects;
   }
 
   return normalized;
@@ -155,7 +169,7 @@ function validateImportPayload(raw) {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     throw new Error('备份文件缺少 profile 数据');
   }
-  const knownFields = ['name', 'role', 'bio', 'email', 'awards', 'certificates', 'blogs'];
+  const knownFields = ['name', 'role', 'school', 'bio', 'email', 'projects', 'awards', 'certificates', 'blogs'];
   if (!knownFields.some((field) => Object.prototype.hasOwnProperty.call(candidate, field))) {
     throw new Error('这不是有效的 TermResume 数据文件');
   }
@@ -175,12 +189,38 @@ function blogFileName(blog, index, used) {
   return name;
 }
 
-/* profile 是内容源，VFS 的 blog/ 只是终端浏览视图。 */
+function projectReadmeLines(project) {
+  if (Array.isArray(project.readme) && project.readme.length) return project.readme;
+  return [
+    '# projects/' + (project.slug || 'untitled'),
+    '',
+    '**' + (project.title || project.slug || '未命名项目') + '**',
+    '',
+    project.summary || '暂无项目介绍。',
+    '',
+    ...(project.stack ? ['技术栈：' + project.stack, ''] : []),
+    ...(project.url ? ['项目地址：[' + project.url + '](' + project.url + ')'] : []),
+  ];
+}
+
+/* profile 是内容源，VFS 中的 projects/ 与 blog/ 是终端浏览视图。 */
 function syncProfileToVfs() {
   if (typeof VFS === 'undefined') return;
   const home = VFS.home && VFS.home[CONFIG.user];
+  const projectDir = home && home.projects;
   const blogDir = home && home.blog;
-  if (!blogDir || typeof dir !== 'function' || typeof file !== 'function') return;
+  if (!projectDir || !blogDir || typeof dir !== 'function' || typeof file !== 'function') return;
+
+  Object.keys(projectDir).forEach((key) => {
+    if (key !== '_meta') delete projectDir[key];
+  });
+  (profile.projects || []).forEach((project, index) => {
+    const slug = String(project.slug || 'project-' + (index + 1))
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'project-' + (index + 1);
+    projectDir[slug] = dir({}, { 'README.md': file(projectReadmeLines(project)) });
+  });
 
   Object.keys(blogDir).forEach((key) => {
     if (key !== '_meta') delete blogDir[key];
@@ -234,6 +274,7 @@ function applyProfileToConfig() {
   if (!profile) return;
   CONFIG.name = profile.name || CONFIG.name;
   CONFIG.title = profile.role || CONFIG.title;
+  CONFIG.school = profile.school || '';
   CONFIG.location = profile.location || '';
   CONFIG.email = profile.email || CONFIG.email;
   CONFIG.github = profile.github || '';
@@ -358,12 +399,14 @@ function profileForDisplay() {
   return {
     name: p.name,
     title: p.role,
+    school: p.school || '',
     location: p.location || '',
     email: p.email,
     website: p.website || '',
     github: p.github || '',
     bio: p.bio || '',
     avatar: p.avatar || '',
+    projects: p.projects || [],
     awards: p.awards || [],
     certificates: p.certificates || [],
   };

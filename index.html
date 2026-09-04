@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="dark" />
-  <meta name="description" content="一个可以 cd、ls、cat 的 Linux 终端风格个人主页" />
-  <title>guest@my-linux:~ — TermResume</title>
+  <meta name="color-scheme" content="dark light" />
+  <meta name="description" id="document-description" content="交互式终端个人简历" />
+  <title>guest-TermResume</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%90%A7%3C/text%3E%3C/svg%3E" />
+  <script>
+    const initialHour = new Date().getHours();
+    document.documentElement.dataset.theme = initialHour >= 6 && initialHour < 18 ? 'day' : 'night';
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -17,20 +21,20 @@
     <div class="app-brand">
       <div class="app-logo" aria-hidden="true">YH</div>
       <div class="app-title">
-        <strong id="app-brand-name">余浩 · TERMRESUME</strong>
-        <span>PERSONAL WORKSTATION / 2026</span>
+        <strong id="app-brand-name">TermResume</strong>
+        <span id="app-brand-subtitle">PERSONAL TERMINAL / PORTFOLIO</span>
       </div>
     </div>
     <div class="app-actions">
       <div class="availability" aria-label="站点状态">
         <i aria-hidden="true"></i>
-        <span>OPEN TO CONNECT</span>
+        <span id="availability-text">OPEN TO OPPORTUNITIES</span>
       </div>
       <div class="theme-box">
         <span class="theme-label">DISPLAY</span>
         <button class="mode-toggle" id="mode-toggle" type="button" aria-pressed="false" title="切换昼夜主题">
           <span class="mode-icon" id="mode-icon" aria-hidden="true">☾</span>
-          <span class="mode-text" id="mode-text">黑夜模式</span>
+          <span class="mode-text" id="mode-text">暗黑模式</span>
         </button>
       </div>
     </div>

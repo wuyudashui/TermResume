@@ -52,6 +52,7 @@ function fill(str) {
   return String(str)
     .replaceAll('{name}', CONFIG.name)
     .replaceAll('{title}', CONFIG.title)
+    .replaceAll('{school}', CONFIG.school || '')
     .replaceAll('{user}', CONFIG.user)
     .replaceAll('{host}', CONFIG.host)
     .replaceAll('{location}', CONFIG.location)
@@ -295,9 +296,13 @@ function initTitles() {
   if (liveColonEl) liveColonEl.textContent = ':';
   if (liveDollarEl) liveDollarEl.textContent = ps;
   if (titleEl) titleEl.textContent = `${activeUser()}@${CONFIG.host}: ~`;
-  document.title = `${activeUser()}@${CONFIG.host}: ~ — 个人主页`;
+  document.title = `${activeUser()}-${SITE_CONTENT.productName}`;
   const brandEl = document.getElementById('app-brand-name');
-  if (brandEl) brandEl.textContent = CONFIG.name + ' · TERMRESUME';
+  if (brandEl) brandEl.textContent = CONFIG.name + ' · ' + SITE_CONTENT.productName.toUpperCase();
+  setText('app-brand-subtitle', SITE_CONTENT.brandSubtitle);
+  setText('availability-text', SITE_CONTENT.availabilityText);
+  const descriptionEl = document.getElementById('document-description');
+  if (descriptionEl) descriptionEl.setAttribute('content', SITE_CONTENT.documentDescription);
   setText('session-tag', admin ? 'admin' : 'zsh');
   setText('session-status', admin ? 'ADMIN · 本地维护会话' : 'NORMAL · 虚拟只读系统');
   document.documentElement.setAttribute('data-role', admin ? 'admin' : 'guest');
@@ -333,7 +338,13 @@ function gotoWithTyping(cmd) {
 /* =====================================================================
  * 白天 / 黑夜模式切换
  * =================================================================== */
-const THEME_KEY = 'guestos-mode';
+const DAY_MODE_START_HOUR = 6;
+const DAY_MODE_END_HOUR = 18;
+
+function modeFromLocalTime(date = new Date()) {
+  const hour = date.getHours();
+  return hour >= DAY_MODE_START_HOUR && hour < DAY_MODE_END_HOUR ? 'day' : 'night';
+}
 
 function applyMode(mode) {
   const isDay = mode === 'day';
@@ -343,21 +354,10 @@ function applyMode(mode) {
   const text = document.getElementById('mode-text');
   if (btn) btn.setAttribute('aria-pressed', String(isDay));
   if (icon) icon.textContent = isDay ? '☀' : '☾';
-  if (text) text.textContent = isDay ? '白天模式' : '黑夜模式';
-  try {
-    localStorage.setItem(THEME_KEY, isDay ? 'day' : 'night');
-  } catch (_) {
-    /* 某些环境禁用 localStorage 时静默忽略 */
-  }
+  if (text) text.textContent = isDay ? '白天模式' : '暗黑模式';
 }
 
 function initMode() {
-  let saved = null;
-  try {
-    saved = localStorage.getItem(THEME_KEY);
-  } catch (_) {
-    /* 忽略 */
-  }
   const btn = document.getElementById('mode-toggle');
   if (btn) {
     btn.addEventListener('click', () => {
@@ -365,7 +365,7 @@ function initMode() {
       applyMode(next);
     });
   }
-  applyMode(saved === 'day' ? 'day' : 'night');
+  applyMode(modeFromLocalTime());
 }
 
 /* =====================================================================
@@ -376,20 +376,8 @@ function tuxArt() {
   return TUX.map((l) => l.padEnd(width + 2)).join('\n');
 }
 
-/* ---------- 开屏字符画 ----------
- * 直接用官方 figlet Standard 字体渲染 "YUHAO" 得到的精确字形，
- * 已保持字母的完整笔画（A 的斜杠、U 的闭合底边）。
- * 如需换成别的字母组合，请用 figlet 的 Standard 字体重新渲染后替换。 */
-const BANNER_ART = [
-  ' __   ___   _ _   _    _    ___  ',
-  ' \\ \\ / / | | | | | |  / \\  / _ \\ ',
-  '  \\ V /| | | | |_| | / /_\\ \\| | | |',
-  '   | | | |_| |  _  |/ ___ \\ |_| |',
-  '   |_|  \\___/|_| |_/_/   \\_\\___/ ',
-];
-
 function asciiBannerLines() {
-  return BANNER_ART.map((r) => r.replace(/\s+$/, ''));
+  return (SITE_CONTENT.asciiArt || []).map((r) => r.replace(/\s+$/, ''));
 }
 
 function nameBlockHTML() {
@@ -403,7 +391,7 @@ function nameBlockHTML() {
     title +
     '<div class="identity-footer">' +
     '<strong>' + esc(CONFIG.name) + ' / ' + esc(CONFIG.asciiName) + '</strong>' +
-    '<span>' + esc(CONFIG.title) + ' · 成都理工大学</span>' +
+    '<span>' + esc(CONFIG.title) + (CONFIG.school ? ' · ' + esc(CONFIG.school) : '') + '</span>' +
     '</div>' +
     '</section>'
   );
@@ -435,23 +423,16 @@ function renderNeo() {
     .join('');
 
   const p = typeof getProfile === 'function' ? getProfile() : {};
-  const items = [
-    ['awards', '获奖'],
-    ['certificates', '证书'],
-    ['resume', '履历'],
-    ['projects', '项目'],
-    ['blog', '博客'],
-    ['docs', '说明书'],
-  ];
+  const items = SITE_CONTENT.quickLinks || [];
   const links =
     '<div class="command-deck"><div class="command-deck-title"><span>QUICK ACCESS</span><span>点击或输入 goto</span></div>' +
     '<div class="hero-links">' +
     items
       .map(
         (it, index) =>
-          '<a class="hero-link" data-cmd="goto ' + esc(it[0]) + '" href="#/' + it[0] + '">' +
+          '<a class="hero-link" data-cmd="goto ' + esc(it.route) + '" href="#/' + esc(it.route) + '">' +
           '<span class="hero-link-index">0' + (index + 1) + '</span>' +
-          '<span><b>' + esc(it[0]) + '</b><small>' + esc(it[1]) + '</small></span></a>'
+          '<span><b>' + esc(it.route) + '</b><small>' + esc(it.label) + '</small></span></a>'
       )
       .join('') +
     (p.github
@@ -1180,6 +1161,24 @@ screenEl.addEventListener('click', () => {
   if (!booting) inputEl.focus();
 });
 
+/* 图形页快捷唤起终端；使用物理键位以兼容中英文键盘布局。 */
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey || e.code !== 'Backquote') return;
+  e.preventDefault();
+
+  const focusCommandLine = () => {
+    if (!inputEl.disabled) inputEl.focus();
+  };
+  const route = location.hash.replace(/^#\/?/, '').toLowerCase();
+  if (!route || route === 'terminal' || route === 't' || route === 'home') {
+    focusCommandLine();
+    return;
+  }
+
+  location.hash = '#/terminal';
+  requestAnimationFrame(focusCommandLine);
+});
+
 /* =====================================================================
  * 时钟
  * =================================================================== */
@@ -1215,8 +1214,8 @@ function bootRow(label, text, cls) {
 function showIntro() {
   const compactViewport = typeof matchMedia === 'function' && matchMedia('(max-width: 620px)').matches;
   if (compactViewport) {
-    writeHTML(`<span class="green bold">${esc(activeUser())}@${esc(CONFIG.host)} · YUHAO / TERMRESUME</span>`);
-    writeHTML('<span class="dim">终端已连接。浏览快捷入口，或输入 <span class="cyan">help</span>。</span>');
+    writeHTML(`<span class="green bold">${esc(activeUser())}@${esc(CONFIG.host)} · ${esc(CONFIG.asciiName)} / ${esc(SITE_CONTENT.productName.toUpperCase())}</span>`);
+    writeHTML('<span class="dim">终端已连接。选择快捷入口，或输入 <span class="cyan">help</span> 开始探索。</span>');
     blankLine();
     return;
   }
@@ -1224,12 +1223,12 @@ function showIntro() {
     '<span class="dim">' + '─'.repeat(44) + '</span>'
   );
   writeHTML(
-    `<span class="green bold">${esc(activeUser())}@${esc(CONFIG.host)} · Linux 风格个人主页</span>`
+    `<span class="green bold">${esc(activeUser())}@${esc(CONFIG.host)} · ${esc(SITE_CONTENT.productName)} 交互式简历</span>`
   );
   writeHTML(
-    '<span class="dim">输入 goto 查看图形页面（获奖 / 证书 / 履历 / 项目），</span>'
+    '<span class="dim">输入 goto 打开履历、项目与荣誉页面，</span>'
   );
-  writeHTML('<span class="dim">也可以像使用终端一样逛目录：</span>');
+  writeHTML('<span class="dim">也可以像使用真实终端一样浏览内容：</span>');
   blankLine();
   writeHTML('<span class="cyan">goto awards</span>    <span class="dim">— 图形页：获奖记录</span>');
   writeHTML('<span class="cyan">goto resume</span>    <span class="dim">— 图形页：个人履历</span>');

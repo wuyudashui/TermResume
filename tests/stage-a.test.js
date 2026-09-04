@@ -65,7 +65,9 @@ function value(context, expression) {
   runFiles(context, ['config.js', 'data.js', 'session.js']);
   assert.equal(value(context, 'getProfile().awards.length'), 2);
   assert.equal(value(context, 'VFS.home[CONFIG.user].blog["first-post.md"].content[0]'), '# 你好，博客');
-  assert.equal(JSON.parse(value(context, 'exportProfileJson()')).schemaVersion, 1);
+  assert.equal(value(context, 'getProfile().school'), '成都理工大学');
+  assert.equal(value(context, 'getProfile().projects.length'), 3);
+  assert.equal(JSON.parse(value(context, 'exportProfileJson()')).schemaVersion, 3);
 }
 
 {
@@ -85,7 +87,9 @@ function value(context, expression) {
   assert.equal(value(context, 'getProfile().awards.some((a) => a.id === "custom")'), true);
   assert.equal(value(context, 'getProfile().certificates.length'), 0);
   assert.equal(value(context, 'getProfile().blogs[0].slug'), 'first-post');
-  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 1);
+  assert.equal(value(context, 'getProfile().school'), '成都理工大学');
+  assert.equal(value(context, 'getProfile().projects.length'), 3);
+  assert.equal(JSON.parse(context.localStorage.dump('guestos-profile')).schemaVersion, 3);
 }
 
 {
@@ -116,6 +120,10 @@ function value(context, expression) {
   context.commands.awards.run(['del', 'a-lqb-python-2026']);
   assert.match(context.output.at(-1).text, /只读模式/);
   value(context, 'setSession(AUTH.username, "admin")');
+  context.commands.profile.run(['set', 'school=测试大学']);
+  assert.equal(value(context, 'getProfile().school'), '测试大学');
+  value(context, 'getProfile().projects.push({ id: "p-test", slug: "test-project", title: "测试项目", summary: "测试简介", stack: "JS", url: "", readme: [] }); saveProfile()');
+  assert.equal(value(context, 'VFS.home[CONFIG.user].projects["test-project"]["README.md"].content[2]'), '**测试项目**');
   context.commands.blog.run(['add', '参数测试', '-d', '2026-09-04', '-t', '技术,终端']);
   assert.equal(value(context, 'getProfile().blogs.at(-1).title'), '参数测试');
   assert.equal(value(context, 'getProfile().blogs.at(-1).date'), '2026-09-04');

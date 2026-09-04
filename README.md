@@ -23,6 +23,17 @@ GitHub: <https://github.com/wuyudashui/TermResume>
   guest 看到的是维护后的内容（`resume` 命令与各图形页均可查看）。
   建议定期使用 `data export` 导出 JSON 备份，需要恢复时使用 `data import`。
 
+### 图形管理台
+
+登录 admin 后输入 `goto manage`，或在图形页面顶部点击“管理”，可以直接：
+
+- 修改姓名、身份、学校、简介与公开联系方式；
+- 通过图片 URL 或本地文件设置个人头像；
+- 新增、编辑和删除项目经历。
+
+本地头像建议控制在 900 KB 以内。当前 GitHub Pages 版本仍使用浏览器 `localStorage`，
+管理台的修改只对当前浏览器生效；要让所有访客共享更新，仍需接入 Supabase 等云端数据源。
+
 ## 终端与图形页面（goto）
 
 终端是默认首页与入口，`goto` 负责跳转到**图形化页面**（与 `cd` 的目录漫游分开）：
@@ -141,21 +152,23 @@ sudo rm -rf /                               # 一个无伤大雅的彩蛋
 
 ## 改成你自己的内容
 
-### 1. 个人资料（改 `config.js`）
+### 1. 个人资料与站点内容（改 `config.js`）
 
-`config.js` 是独立的个人资料配置文件，包含：
+`config.js` 是站点内容的唯一默认配置入口，包含：
 
-- `name` 中文名字、`asciiName` 开屏字符画用的英文名
-- `title` 身份/简介、`location` 所在地（可留空）
+- `IDENTITY_DEFAULTS`：姓名、身份、学校、简介与联系方式
+- `SITE_CONTENT`：字符画、顶部品牌文案、关于我、技能、项目和终端引导
+- `PROFILE_DEFAULTS`：获奖、证书和博客的初始数据
+- `CONFIG`：终端用户名、主机名、时区和系统名
 - `email`、`website`（暂无则留空）、`github` 用户名
-- `user` / `host` / `home` 等终端环境参数
 
-页面侧栏、`neofetch`、`about.md`、`contact.md` 会自动使用这里的值，
-以后想改资料只需编辑这一个文件。
+页面侧栏、`neofetch`、虚拟文件和图形页面都会读取这些配置。修改个人化内容时，
+优先只编辑这一个文件；登录 admin 后的修改仍会保存在浏览器 `localStorage`。
 
-### 2. 虚拟文件系统内容（改 `data.js`）
+### 2. 虚拟文件系统结构（改 `data.js`）
 
-`data.js` 中间的 `VFS` 是虚拟目录树，直接在树里增删改文件/目录即可：
+`data.js` 中的 `VFS` 负责虚拟目录结构。个人介绍、技能与项目内容来自
+`config.js` 的 `SITE_CONTENT`；只有新增系统目录或非个人化文件时才需要修改这里。
 
 新增目录/文件的写法：
 

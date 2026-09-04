@@ -17,6 +17,8 @@ const ROUTES = {
   projects: 'projects',
   blog: 'blog',
   docs: 'docs',
+  manage: 'manage',
+  admin: 'manage',
   guide: 'docs',
   help: 'docs',
   certs: 'certificates',
@@ -40,6 +42,7 @@ const ROUTE_META = {
   projects: { label: '项目', tagline: '我做过的东西' },
   blog: { label: '博客', tagline: 'Markdown 时间线' },
   docs: { label: '指令说明书', tagline: '本站可用指令速查' },
+  manage: { label: '内容管理', tagline: '维护个人资料、头像与项目' },
 };
 
 /* 顶部导航中可跳转的图形页（按顺序） */
@@ -72,7 +75,10 @@ function backBtn() {
 function renderPageHead(route) {
   const nav = document.getElementById('page-nav');
   if (!nav) return;
-  nav.innerHTML = NAV_PAGES.map(
+  const pages = currentRole() === 'admin'
+    ? [...NAV_PAGES, { key: 'manage', label: '管理' }]
+    : NAV_PAGES;
+  nav.innerHTML = pages.map(
     (p) =>
       '<a class="' + (route === p.key ? 'active' : '') + '" href="#/' + p.key + '" data-route="' + p.key + '">' +
       escHtml(p.label) + '</a>'
@@ -98,6 +104,7 @@ function renderPage(route) {
   else if (route === 'projects') body.innerHTML = renderProjectsPage();
   else if (route === 'blog') body.innerHTML = renderBlogPage();
   else if (route === 'docs') body.innerHTML = renderDocsPage();
+  else if (route === 'manage') body.innerHTML = renderManagePage();
   else body.innerHTML = '';
 }
 
@@ -415,35 +422,78 @@ function renderResumePage() {
 }
 
 function renderProjectsPage() {
-  const root = VFS.home[CONFIG.user];
-  let cards = '';
-  if (root && isDir(root) && root.projects && isDir(root.projects)) {
-    const names = childNames(root.projects).sort();
-    cards = names
-      .map((name) => {
-        const node = root.projects[name];
-        let readme = '';
-        if (node && isDir(node) && node['README.md']) {
-          const c = node['README.md'].content;
-          const lines = typeof c === 'function' ? c() : c;
-          const text = Array.isArray(lines) ? lines.join('\n') : String(lines);
-          const slice = text.replace(/#+/, '').trim().split('\n')[0] || '';
-          readme = slice;
-        }
-        return (
-          '<article class="gui-card proj-card">' +
-          '<h3>' + escHtml(name) + '</h3>' +
-          (readme ? '<p>' + escHtml(readme) + '</p>' : '') +
-          '</article>'
-        );
-      })
-      .join('');
-  }
+  const p = getProfile();
+  const cards = (p.projects || []).map((project) =>
+    '<article class="gui-card proj-card">' +
+    '<div class="gui-card-year">' + escHtml(project.slug || 'project') + '</div>' +
+    '<h3>' + escHtml(project.title || project.slug || '未命名项目') + '</h3>' +
+    (project.summary ? '<p>' + escHtml(project.summary) + '</p>' : '') +
+    (project.stack ? '<div class="project-stack">' + escHtml(project.stack) + '</div>' : '') +
+    (project.url ? '<a class="project-link" href="' + escHtml(project.url) + '" target="_blank" rel="noopener">查看项目 ↗</a>' : '') +
+    '</article>'
+  ).join('');
   return (
     takePageNotice() +
-    profileHeader(getProfile()) +
+    profileHeader(p) +
     '<div class="gui-section-title">项目 · Projects</div>' +
     (cards ? '<div class="gui-grid">' + cards + '</div>' : '<div class="gui-empty">（项目目录为空）</div>')
+  );
+}
+
+/* ---------- 图形管理台：个人资料 / 头像 / 项目 ---------- */
+function renderManagePage() {
+  if (currentRole() !== 'admin') {
+    return '<div class="manage-locked"><strong>管理页面仅对管理员开放</strong>' +
+      '<p>按 Ctrl + ` 返回终端，输入 login 完成登录。</p></div>';
+  }
+  const p = getProfile();
+  const projects = (p.projects || []).map((project, index) =>
+    '<article class="manage-project" data-project-id="' + escHtml(project.id || '') + '">' +
+    '<div class="manage-project-head"><span>项目 ' + String(index + 1).padStart(2, '0') + '</span>' +
+    '<button class="gui-del" data-manage-project-del="' + escHtml(project.id || '') + '" type="button">删除</button></div>' +
+    '<div class="manage-fields">' +
+    '<label>项目名称<input data-project-field="title" value="' + escHtml(project.title || '') + '" /></label>' +
+    '<label>目录标识<input data-project-field="slug" value="' + escHtml(project.slug || '') + '" placeholder="my-project" /></label>' +
+    '<label class="manage-wide">项目简介<textarea data-project-field="summary" rows="3">' + escHtml(project.summary || '') + '</textarea></label>' +
+    '<label>技术栈<input data-project-field="stack" value="' + escHtml(project.stack || '') + '" /></label>' +
+    '<label>项目地址<input data-project-field="url" type="url" value="' + escHtml(project.url || '') + '" placeholder="https://" /></label>' +
+    '</div>' +
+    '<button class="manage-save-project" data-manage-project-save="' + escHtml(project.id || '') + '" type="button">保存项目</button>' +
+    '</article>'
+  ).join('');
+
+  return (
+    takePageNotice() +
+    '<div class="manage-heading"><div><div class="gui-section-title">管理台 · Content Studio</div>' +
+    '<h2>维护公开简历内容</h2><p>保存后会同步更新终端与图形页面。</p></div>' +
+    '<span>ADMIN SESSION</span></div>' +
+    '<section class="manage-section">' +
+    '<div class="manage-section-head"><div><h3>个人资料</h3><p>姓名、履历身份与公开联系方式</p></div></div>' +
+    '<div class="manage-profile-layout">' +
+    '<div class="manage-avatar-box">' +
+    (p.avatar
+      ? '<img id="manage-avatar-preview" src="' + escHtml(p.avatar) + '" alt="当前头像" />'
+      : '<div id="manage-avatar-preview" class="manage-avatar-placeholder">' + escHtml((p.name || '?').slice(0, 1)) + '</div>') +
+    '<label class="manage-file-button">选择本地图片<input id="manage-avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" /></label>' +
+    '<button id="manage-avatar-clear" class="manage-secondary" type="button">移除头像</button>' +
+    '</div>' +
+    '<div class="manage-fields">' +
+    '<label>姓名<input id="manage-name" value="' + escHtml(p.name || '') + '" /></label>' +
+    '<label>身份 / 方向<input id="manage-role" value="' + escHtml(p.role || '') + '" /></label>' +
+    '<label>学校 / 组织<input id="manage-school" value="' + escHtml(p.school || '') + '" /></label>' +
+    '<label>所在地<input id="manage-location" value="' + escHtml(p.location || '') + '" /></label>' +
+    '<label>邮箱<input id="manage-email" type="email" value="' + escHtml(p.email || '') + '" /></label>' +
+    '<label>GitHub 用户名<input id="manage-github" value="' + escHtml(p.github || '') + '" /></label>' +
+    '<label>个人网站<input id="manage-website" type="url" value="' + escHtml(p.website || '') + '" placeholder="https://" /></label>' +
+    '<label>头像 URL<input id="manage-avatar-url" value="' + escHtml(p.avatar || '') + '" placeholder="https:// 或 data:image/" /></label>' +
+    '<label class="manage-wide">个人简介<textarea id="manage-bio" rows="4">' + escHtml(p.bio || '') + '</textarea></label>' +
+    '<div class="manage-wide manage-actions"><button id="manage-profile-save" type="button">保存个人资料</button></div>' +
+    '</div></div></section>' +
+    '<section class="manage-section">' +
+    '<div class="manage-section-head"><div><h3>项目经历</h3><p>维护项目名称、介绍、技术栈与链接</p></div>' +
+    '<button id="manage-project-new" type="button">新增项目</button></div>' +
+    '<div class="manage-projects">' + (projects || '<div class="gui-empty">暂无项目，点击右上角新增。</div>') + '</div>' +
+    '</section>'
   );
 }
 
@@ -499,6 +549,8 @@ function bindPageEvents() {
     const editB = e.target.closest && e.target.closest('[data-blog-edit]');
     const delB = e.target.closest && e.target.closest('[data-blog-del]');
     const cancelB = e.target.closest && e.target.closest('[data-blog-cancel]');
+    const delProject = e.target.closest && e.target.closest('[data-manage-project-del]');
+    const saveProject = e.target.closest && e.target.closest('[data-manage-project-save]');
     if (openB) {
       blogState = { view: 'read', id: openB.getAttribute('data-blog-open'), edit: false };
       renderPage(normalizeHash());
@@ -528,8 +580,98 @@ function bindPageEvents() {
       p.certificates = p.certificates.filter((x) => x.id !== delC.getAttribute('data-del-cert'));
       saveFromPage('证书已删除。', '删除');
       renderPage(normalizeHash());
+    } else if (delProject) {
+      if (currentRole() !== 'admin') return;
+      const id = delProject.getAttribute('data-manage-project-del');
+      const p = getProfile();
+      p.projects = (p.projects || []).filter((project) => project.id !== id);
+      saveFromPage('项目已删除。', '删除');
+      renderPage('manage');
+    } else if (saveProject) {
+      if (currentRole() !== 'admin') return;
+      const card = saveProject.closest('.manage-project');
+      const id = saveProject.getAttribute('data-manage-project-save');
+      const project = (getProfile().projects || []).find((item) => item.id === id);
+      if (!card || !project) return;
+      card.querySelectorAll('[data-project-field]').forEach((field) => {
+        project[field.getAttribute('data-project-field')] = field.value.trim();
+      });
+      project.slug = project.slug
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'project-' + Date.now();
+      project.readme = [];
+      saveFromPage('项目已保存。');
+      renderPage('manage');
     }
   };
+
+  const profileSave = document.getElementById('manage-profile-save');
+  if (profileSave) {
+    profileSave.onclick = () => {
+      if (currentRole() !== 'admin') return;
+      const p = getProfile();
+      const fields = {
+        name: 'manage-name', role: 'manage-role', school: 'manage-school',
+        location: 'manage-location', email: 'manage-email', github: 'manage-github',
+        website: 'manage-website', avatar: 'manage-avatar-url', bio: 'manage-bio',
+      };
+      Object.entries(fields).forEach(([key, id]) => {
+        const input = document.getElementById(id);
+        if (input) p[key] = input.value.trim();
+      });
+      saveFromPage('个人资料已保存。');
+      renderPage('manage');
+    };
+  }
+
+  const avatarFile = document.getElementById('manage-avatar-file');
+  if (avatarFile) {
+    avatarFile.onchange = () => {
+      if (currentRole() !== 'admin') return;
+      const selected = avatarFile.files && avatarFile.files[0];
+      if (!selected) return;
+      if (selected.size > 900 * 1024) {
+        setPageNotice('图片过大，请选择 900 KB 以内的头像。');
+        renderPage('manage');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const p = getProfile();
+        p.avatar = String(reader.result || '');
+        saveFromPage('头像已更新。');
+        renderPage('manage');
+      };
+      reader.onerror = () => {
+        setPageNotice('头像读取失败，请重新选择。');
+        renderPage('manage');
+      };
+      reader.readAsDataURL(selected);
+    };
+  }
+
+  const avatarClear = document.getElementById('manage-avatar-clear');
+  if (avatarClear) {
+    avatarClear.onclick = () => {
+      if (currentRole() !== 'admin') return;
+      getProfile().avatar = '';
+      saveFromPage('头像已移除。');
+      renderPage('manage');
+    };
+  }
+
+  const projectNew = document.getElementById('manage-project-new');
+  if (projectNew) {
+    projectNew.onclick = () => {
+      if (currentRole() !== 'admin') return;
+      const id = 'p' + Date.now();
+      getProfile().projects.push({
+        id, slug: 'new-project', title: '未命名项目', summary: '', stack: '', url: '', readme: [],
+      });
+      saveFromPage('新项目已创建，请继续填写内容。');
+      renderPage('manage');
+    };
+  }
 
   const newB = document.getElementById('blog-new');
   if (newB) {
